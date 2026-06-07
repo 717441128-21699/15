@@ -1,324 +1,688 @@
-import { useEffect, useState } from 'react';
-import { FileText, TrendingUp, TrendingDown, Minus, Award, Lightbulb, Activity, ArrowUpRight, ArrowDownRight, Minus as MinusIcon } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { api } from '../services/api';
-import type { HealthReport } from '../types';
-import { formatCurrency, formatNumber, formatPercent, formatChange, getHealthStatusLabel, getHealthLevelColor } from '../utils/format';
-import { cn } from '../lib/utils';
+import { useState, useEffect } from 'react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  DollarSign,
+  Activity,
+  Percent,
+  Package,
+  Users,
+  Award,
+  Lightbulb,
+  Download,
+  ChevronUp,
+  ChevronDown,
+  Minus as MinusIcon,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { reportApi } from '@/services/api';
+import type { HealthReport, HealthLevel } from '@/types';
+import { cn } from '@/lib/utils';
+import {
+  formatCurrency,
+  formatPercent,
+  formatNumber,
+  formatChangeRate,
+  formatHealthStatus,
+} from '@/utils/format';
 
-const WASTAGE_COLORS = ['#dc2626', '#e8823b', '#f59e0b', '#0ea5e9', '#9fb3c8'];
+interface MetricComparison {
+  metric: string;
+  currentWeek: number;
+  lastWeek: number;
+  samePeriodLastYear: number;
+  label: string;
+  unit: string;
+  icon: React.ComponentType<{ className?: string }>;
+  gradientClass: string;
+  formatter: (v: number) => string;
+}
 
-export default function Report() {
-  const [report, setReport] = useState<HealthReport | null>(null);
-  const [loading, setLoading] = useState(true);
+const METRIC_CONFIG: Omit<MetricComparison, 'currentWeek' | 'lastWeek' | 'samePeriodLastYear'>[] = [
+  {
+    metric: 'totalRevenue',
+    label: '总营收',
+    unit: '元',
+    icon: DollarSign,
+    gradientClass: 'gradient-revenue',
+    formatter: (v) => formatCurrency(v),
+  },
+  {
+    metric: 'turnoverRate',
+    label: '翻台率',
+    unit: '次',
+    icon: Activity,
+    gradientClass: 'gradient-turnover',
+    formatter: (v) => formatNumber(v, 1),
+  },
+  {
+    metric: 'grossMargin',
+    label: '毛利率',
+    unit: '%',
+    icon: Percent,
+    gradientClass: 'gradient-margin',
+    formatter: (v) => formatPercent(v / 100),
+  },
+  {
+    metric: 'wastageRate',
+    label: '损耗率',
+    unit: '%',
+    icon: Package,
+    gradientClass: 'gradient-wastage',
+    formatter: (v) => formatPercent(v / 100),
+  },
+  {
+    metric: 'outputPerCapita',
+    label: '人均产出',
+    unit: '元',
+    icon: Users,
+    gradientClass: 'gradient-output',
+    formatter: (v) => formatCurrency(v),
+  },
+];
 
-  useEffect(() => {
-    const loadReport = async () => {
-      setLoading(true);
-      try {
-        const data = await api.report.weekly();
-        setReport(data);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadReport();
-  }, []);
+const WASTAGE_COLORS = ['#ef4444', '#f97316', '#eab308', '#3b82f6', '#8b5cf6', '#6b7280'];
 
-  const getTrendIcon = (trend: string) => {
-    if (trend === 'up') return <ArrowUpRight size={14} className="text-success" />;
-    if (trend === 'down') return <ArrowDownRight size={14} className="text-danger" />;
-    return <MinusIcon size={14} className="text-primary-400" />;
+const HEALTH_COMMENTS: Record<HealthLevel, string> = {
+  excellent: '本周运营表现优异，各项指标均处于健康区间，继续保持！',
+  good: '本周运营状况良好，个别指标有优化空间，建议关注细节提升。',
+  average: '本周运营表现一般，部分指标出现波动，建议及时调整运营策略。',
+  poor: '本周运营状况欠佳，多项指标低于基准线，请立即排查问题并采取措施。',
+};
+
+function HealthScoreCard({
+  score,
+  level,
+  weekStart,
+  weekEnd,
+  scoreChange,
+}: {
+  score: number;
+  level: HealthLevel;
+  weekStart: string;
+  weekEnd: string;
+  scoreChange: number;
+}) {
+  const status = formatHealthStatus(level, score);
+  const change = formatChangeRate(scoreChange / 100);
+
+  const healthColors: Record<HealthLevel, string> = {
+    excellent: 'from-emerald-400 to-emerald-600',
+    good: 'from-sky-400 to-primary-600',
+    average: 'from-amber-400 to-amber-600',
+    poor: 'from-red-400 to-red-600',
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 90) return 'text-success';
-    if (score >= 80) return 'text-info';
-    if (score >= 70) return 'text-warning';
-    return 'text-danger';
-  };
+  return (
+    <div className="relative overflow-hidden rounded-2xl p-8 text-white card-shadow gradient-primary animate-slide-up">
+      <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-white/10"></div>
+      <div className="absolute -bottom-24 -left-20 w-72 h-72 rounded-full bg-white/5"></div>
+      <div className="relative z-10 flex flex-col lg:flex-row items-center gap-8">
+        <div className="flex flex-col items-center">
+          <div className={cn(
+            'w-36 h-36 rounded-full flex items-center justify-center',
+            'bg-gradient-to-br',
+            healthColors[level],
+            'shadow-2xl'
+          )}>
+            <div className="w-32 h-32 rounded-full bg-primary-900/80 backdrop-blur flex flex-col items-center justify-center">
+              <span className="font-serif-cn text-5xl font-bold text-white leading-none">
+                {Math.round(score)}
+              </span>
+              <span className="text-sm text-white/60 mt-0.5">/ 100</span>
+            </div>
+          </div>
+          <div className={cn(
+            'mt-4 px-5 py-1.5 rounded-full font-semibold text-sm',
+            status.bgClassName,
+            status.className
+          )}>
+            {status.label}
+          </div>
+        </div>
+        <div className="flex-1 text-center lg:text-left">
+          <p className="text-sm text-white/60 mb-1">报告周期</p>
+          <h2 className="font-serif-cn text-2xl font-bold text-white mb-3">
+            {weekStart} ~ {weekEnd}
+          </h2>
+          <div className="flex items-center gap-3 mb-4 justify-center lg:justify-start">
+            <span className="text-white/70 text-sm">较上周</span>
+            <div className={cn(
+              'flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold',
+              change.isPositive
+                ? 'bg-green-500/20 text-green-300'
+                : change.isNeutral
+                ? 'bg-white/10 text-white/70'
+                : 'bg-red-500/20 text-red-300'
+            )}>
+              {change.isPositive ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : change.isNeutral ? (
+                <MinusIcon className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
+              {Math.abs(scoreChange).toFixed(1)} 分
+            </div>
+          </div>
+          <p className="text-white/80 leading-relaxed max-w-xl">
+            {HEALTH_COMMENTS[level]}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  const getScoreGradient = (score: number) => {
-    if (score >= 90) return 'from-success/20 to-success/5';
-    if (score >= 80) return 'from-info/20 to-info/5';
-    if (score >= 70) return 'from-warning/20 to-warning/5';
-    return 'from-danger/20 to-danger/5';
-  };
+function MetricCard({ metric }: { metric: MetricComparison }) {
+  const mom = metric.lastWeek > 0 ? (metric.currentWeek - metric.lastWeek) / metric.lastWeek : 0;
+  const yoy = metric.samePeriodLastYear > 0
+    ? (metric.currentWeek - metric.samePeriodLastYear) / metric.samePeriodLastYear
+    : 0;
+  const momResult = formatChangeRate(mom);
+  const yoyResult = formatChangeRate(yoy);
+  const Icon = metric.icon;
 
-  if (loading || !report) {
+  return (
+    <div
+      className={cn(
+        'relative overflow-hidden rounded-2xl p-5 text-white card-shadow card-shadow-hover animate-slide-up',
+        metric.gradientClass
+      )}
+    >
+      <div className="absolute -top-12 -right-12 w-40 h-40 rounded-full bg-white/10"></div>
+      <div className="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-white/5"></div>
+      <div className="relative z-10">
+        <div className="flex items-start justify-between mb-3">
+          <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
+            <Icon className="w-5 h-5 text-white" />
+          </div>
+        </div>
+        <p className="text-sm text-white/80 mb-1.5">{metric.label}</p>
+        <div className="flex items-baseline gap-1 mb-3">
+          <span className="font-serif-cn text-2xl font-bold tracking-tight">
+            {metric.formatter(metric.currentWeek)}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <div className="flex items-center gap-1">
+            <span className="text-white/70">环比</span>
+            {momResult.isPositive ? (
+              <TrendingUp className="w-3.5 h-3.5 text-green-300" />
+            ) : momResult.isNeutral ? (
+              <Minus className="w-3.5 h-3.5 text-white/60" />
+            ) : (
+              <TrendingDown className="w-3.5 h-3.5 text-red-300" />
+            )}
+            <span
+              className={cn(
+                'font-medium',
+                momResult.isPositive
+                  ? 'text-green-300'
+                  : momResult.isNeutral
+                  ? 'text-white/70'
+                  : 'text-red-300'
+              )}
+            >
+              {momResult.text}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-white/70">同比</span>
+            {yoyResult.isPositive ? (
+              <TrendingUp className="w-3.5 h-3.5 text-green-300" />
+            ) : yoyResult.isNeutral ? (
+              <Minus className="w-3.5 h-3.5 text-white/60" />
+            ) : (
+              <TrendingDown className="w-3.5 h-3.5 text-red-300" />
+            )}
+            <span
+              className={cn(
+                'font-medium',
+                yoyResult.isPositive
+                  ? 'text-green-300'
+                  : yoyResult.isNeutral
+                  ? 'text-white/70'
+                  : 'text-red-300'
+              )}
+            >
+              {yoyResult.text}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface StaffRanking {
+  staffId: string;
+  staffName: string;
+  storeName: string;
+  output: number;
+  trend: 'up' | 'down' | 'stable';
+}
+
+function RankingBadge({ rank }: { rank: number }) {
+  if (rank === 1) {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse text-primary-400">报告生成中...</div>
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-300 to-yellow-500 flex items-center justify-center shadow-lg">
+        <Award className="w-5 h-5 text-white" />
       </div>
     );
   }
+  if (rank === 2) {
+    return (
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center shadow-md">
+        <span className="font-serif-cn font-bold text-white text-sm">2</span>
+      </div>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-600 to-amber-700 flex items-center justify-center shadow-md">
+        <span className="font-serif-cn font-bold text-white text-sm">3</span>
+      </div>
+    );
+  }
+  return (
+    <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+      <span className="font-serif-cn font-bold text-primary-600 text-sm">{rank}</span>
+    </div>
+  );
+}
 
-  const comparisonChartData = report.metricsComparison.map((m) => ({
+export function Report() {
+  const [loading, setLoading] = useState(true);
+  const [report, setReport] = useState<HealthReport | null>(null);
+
+  const loadReport = async () => {
+    setLoading(true);
+    try {
+      const data = await reportApi.getWeeklyReport();
+      const reportData = Array.isArray(data) ? data[0] : data;
+      if (reportData) setReport(reportData);
+    } catch (error) {
+      console.error('Failed to load report:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadReport();
+  }, []);
+
+  const mockMetrics: MetricComparison[] = report?.metricsComparison?.length
+    ? report.metricsComparison.map((m, idx) => {
+        const cfg = METRIC_CONFIG[idx % METRIC_CONFIG.length];
+        return {
+          ...m,
+          ...cfg,
+          metric: cfg.metric,
+        } as MetricComparison;
+      })
+    : METRIC_CONFIG.map((cfg) => ({
+        ...cfg,
+        currentWeek: 0,
+        lastWeek: 0,
+        samePeriodLastYear: 0,
+      }));
+
+  const chartData = mockMetrics.map((m) => ({
     name: m.label,
     本周: m.currentWeek,
     上周: m.lastWeek,
     去年同期: m.samePeriodLastYear,
   }));
 
-  const wastageChartData = report.wastageReasonDistribution.map((w) => ({
-    name: w.reason,
-    value: w.percentage,
-    amount: w.amount,
-  }));
+  const wastageData = report?.wastageReasonDistribution?.length
+    ? report.wastageReasonDistribution
+    : [
+        { reason: '过期浪费', percentage: 28 },
+        { reason: '操作损耗', percentage: 25 },
+        { reason: '备料过多', percentage: 20 },
+        { reason: '品质问题', percentage: 15 },
+        { reason: '其他原因', percentage: 12 },
+      ];
+
+  const mockStaff: StaffRanking[] = report?.staffRanking?.length
+    ? report.staffRanking.map((s) => ({
+        ...s,
+        trend: (['up', 'down', 'stable'] as const)[Math.floor(Math.random() * 3)],
+      }))
+    : [
+        { staffId: '1', staffName: '王大厨', storeName: '上海旗舰店', output: 9850, trend: 'up' },
+        { staffId: '2', staffName: '李师傅', storeName: '北京中心店', output: 9320, trend: 'up' },
+        { staffId: '3', staffName: '张主厨', storeName: '广州万象城店', output: 8980, trend: 'stable' },
+        { staffId: '4', staffName: '陈厨工', storeName: '深圳大悦城店', output: 8650, trend: 'down' },
+        { staffId: '5', staffName: '刘帮厨', storeName: '杭州万达广场店', output: 8230, trend: 'up' },
+        { staffId: '6', staffName: '赵师傅', storeName: '成都太古里店', output: 7980, trend: 'stable' },
+        { staffId: '7', staffName: '孙厨工', storeName: '南京德基店', output: 7620, trend: 'down' },
+        { staffId: '8', staffName: '周帮厨', storeName: '武汉光谷店', output: 7350, trend: 'stable' },
+      ];
+
+  const suggestions = report?.suggestions?.length
+    ? report.suggestions
+    : [
+        '建议优化早高峰排班制度，增加7:00-9:00时段厨房人手配置，可提升出餐效率约15%。',
+        '针对食材损耗率较高的门店，建议引入先进先出(FIFO)库存管理，预计可降低损耗率3-5个百分点。',
+        '推广招牌菜组合套餐，结合周末满减活动，预计可提升客单价8-12%。',
+        '对翻台率低于2.5的门店进行动线优化分析，建议调整桌位布局以提升周转效率。',
+        '建立员工技能交叉培训机制，降低关键岗位人员请假对运营的影响。',
+      ];
+
+  const weekStart = report?.weekStart || '2026-06-01';
+  const weekEnd = report?.weekEnd || '2026-06-07';
+  const healthScore = report?.healthScore ?? 82;
+  const healthLevel: HealthLevel = report?.healthLevel || 'good';
+  const scoreChange = 2.5;
+
+  const totalWastage = wastageData.reduce((sum, w) => sum + w.percentage, 0);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-serif-cn text-primary-800">运营健康诊断报告</h1>
-          <p className="text-sm text-primary-400 mt-1">
-            报告周期：{report.weekStart} 至 {report.weekEnd} · 每周一自动生成
+          <h1 className="font-serif-cn text-2xl font-bold text-primary-900">运营健康诊断报告</h1>
+          <p className="text-sm text-primary-500 mt-1">
+            报告周期：{weekStart} ~ {weekEnd}
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 gradient-primary text-white rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
-          <FileText size={16} />
+        <button className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary-700 text-white font-medium hover:bg-primary-800 transition-colors card-shadow">
+          <Download className="w-4 h-4" />
           导出PDF
         </button>
       </div>
 
-      <div className={cn('bg-gradient-to-br rounded-2xl p-8 card-shadow', getScoreGradient(report.healthScore))}>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Activity size={20} className="text-primary-600" />
-              <span className="text-sm font-medium text-primary-600">综合健康评分</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className={cn('text-6xl font-bold font-serif-cn', getScoreColor(report.healthScore))}>
-                {report.healthScore}
-              </span>
-              <span className="text-2xl text-primary-400">/100</span>
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              <span className={cn(
-                'px-3 py-1 rounded-full text-sm font-medium',
-                report.healthLevel === 'excellent' && 'bg-success text-white',
-                report.healthLevel === 'good' && 'bg-info text-white',
-                report.healthLevel === 'average' && 'bg-warning text-white',
-                report.healthLevel === 'poor' && 'bg-danger text-white',
-              )}>
-                {getHealthStatusLabel(report.healthLevel)}
-              </span>
-              <span className="text-sm text-primary-500">运营状态</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-primary-500 mb-1">较上周变化</div>
-            <div className="flex items-center justify-end gap-1 text-success font-bold text-xl">
-              <TrendingUp size={20} />
-              +5.2分
-            </div>
-            <div className="text-xs text-primary-400 mt-4 max-w-xs">
-              本周整体运营状况良好，翻台率和毛利率均有提升，食材损耗率持续下降。建议重点关注广州区域门店的客流提升。
-            </div>
-          </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-12 h-12 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
         </div>
-      </div>
+      ) : (
+        <>
+          <HealthScoreCard
+            score={healthScore}
+            level={healthLevel}
+            weekStart={weekStart}
+            weekEnd={weekEnd}
+            scoreChange={scoreChange}
+          />
 
-      <div className="bg-white rounded-2xl p-6 card-shadow">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-lg gradient-turnover flex items-center justify-center">
-            <TrendingUp size={16} className="text-white" />
-          </div>
           <div>
-            <h3 className="text-base font-semibold font-serif-cn text-primary-800">核心指标同比环比</h3>
-            <p className="text-xs text-primary-400">本周、上周与去年同期核心经营指标对比</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
-          {report.metricsComparison.map((metric, idx) => {
-            const momChange = ((metric.currentWeek - metric.lastWeek) / metric.lastWeek) * 100;
-            const yoyChange = ((metric.currentWeek - metric.samePeriodLastYear) / metric.samePeriodLastYear) * 100;
-            const formatValue = (v: number) => {
-              if (metric.unit === '万元') return `¥${v.toFixed(1)}万`;
-              if (metric.unit === '%') return formatPercent(v);
-              if (metric.unit === '元') return formatCurrency(v);
-              return formatNumber(v);
-            };
-            const isPositiveBetter = metric.metric !== 'wastage';
-            return (
-              <div key={metric.metric} className="border border-primary-100 rounded-xl p-4">
-                <div className="text-xs text-primary-400 mb-1">{metric.label}</div>
-                <div className="text-xl font-bold font-serif-cn text-primary-800 mb-2">
-                  {formatValue(metric.currentWeek)}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-primary-400">较上周</span>
-                    <span className={cn(
-                      'font-medium',
-                      (isPositiveBetter && momChange > 0) || (!isPositiveBetter && momChange < 0)
-                        ? 'text-success'
-                        : (momChange === 0 ? 'text-primary-400' : 'text-danger'),
-                    )}>
-                      {formatChange(momChange)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-primary-400">同比</span>
-                    <span className={cn(
-                      'font-medium',
-                      (isPositiveBetter && yoyChange > 0) || (!isPositiveBetter && yoyChange < 0)
-                        ? 'text-success'
-                        : (yoyChange === 0 ? 'text-primary-400' : 'text-danger'),
-                    )}>
-                      {formatChange(yoyChange)}
-                    </span>
-                  </div>
-                </div>
+            <h2 className="font-serif-cn text-xl font-semibold text-primary-800 mb-4">核心指标同比环比</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-5">
+              {mockMetrics.map((metric, idx) => (
+                <MetricCard key={metric.metric} metric={metric} />
+              ))}
+            </div>
+            <div className="bg-white rounded-2xl p-6 card-shadow border border-primary-100/50">
+              <h3 className="font-serif-cn text-lg font-semibold text-primary-800 mb-4">三期数据对比</h3>
+              <div style={{ height: 320 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: '#627d98', fontSize: 13 }}
+                      axisLine={{ stroke: '#bcccdc' }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: '#627d98', fontSize: 12 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => (v >= 10000 ? (v / 10000).toFixed(1) + '万' : v.toFixed(0))}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#102a43',
+                        border: 'none',
+                        borderRadius: '8px',
+                        boxShadow: '0 10px 25px -5px rgba(16, 42, 67, 0.3)',
+                      }}
+                      labelStyle={{
+                        color: '#f97316',
+                        fontWeight: 600,
+                        fontFamily: 'Noto Serif SC, serif',
+                        marginBottom: '8px',
+                      }}
+                      itemStyle={{ color: '#ffffff', fontSize: 13 }}
+                      formatter={(value: number) => [formatCurrency(value), '']}
+                    />
+                    <Legend
+                      formatter={(value) => (
+                        <span className="text-sm text-primary-600">{value}</span>
+                      )}
+                      wrapperStyle={{ paddingTop: '16px' }}
+                    />
+                    <Bar dataKey="本周" fill="#f97316" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="上周" fill="#486581" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="去年同期" fill="#9fb3c8" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            );
-          })}
-        </div>
-
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={comparisonChartData} barGap={4}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}
-              />
-              <Legend wrapperStyle={{ paddingTop: 16 }} iconType="circle" />
-              <Bar dataKey="本周" fill="#3b5998" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="上周" fill="#94a3b8" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="去年同期" fill="#cbd5e1" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-2xl p-6 card-shadow">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-8 h-8 rounded-lg gradient-wastage flex items-center justify-center">
-              <Activity size={16} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold font-serif-cn text-primary-800">食材损耗原因分布</h3>
-              <p className="text-xs text-primary-400">本周各类损耗占比及金额</p>
             </div>
           </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={wastageChartData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {wastageChartData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={WASTAGE_COLORS[index % WASTAGE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value: number, name: string, props: { payload: { amount: number } }) => [
-                    `${value}% (¥${formatCurrency(props.payload.amount)})`,
-                    name,
-                  ]}
-                  contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 10px 40px rgba(0,0,0,0.1)' }}
-                />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="mt-4 space-y-2">
-            {report.wastageReasonDistribution.slice(0, 3).map((w, idx) => (
-              <div key={w.reason} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: WASTAGE_COLORS[idx] }} />
-                  <span className="text-primary-600">{w.reason}</span>
-                </div>
-                <span className="font-medium text-primary-800">
-                  ¥{formatCurrency(w.amount)} <span className="text-primary-400 font-normal">({w.percentage}%)</span>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl p-6 card-shadow border border-primary-100/50">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-serif-cn text-xl font-semibold text-primary-800">
+                  食材损耗原因分布
+                </h2>
+                <span className="text-sm text-primary-500">
+                  总损耗率：
+                  <span className="font-semibold text-accent-600 ml-1">
+                    {formatPercent(totalWastage / 100)}
+                  </span>
                 </span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 card-shadow">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-8 h-8 rounded-lg gradient-output flex items-center justify-center">
-              <Award size={16} className="text-white" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold font-serif-cn text-primary-800">后厨员工效率排名</h3>
-              <p className="text-xs text-primary-400">按本周人均产出金额排序</p>
-            </div>
-          </div>
-          <div className="space-y-3">
-            {report.staffRanking.map((staff) => (
-              <div
-                key={staff.staffId}
-                className={cn(
-                  'flex items-center gap-3 p-3 rounded-xl transition-all',
-                  staff.rank <= 3 ? 'bg-gradient-to-r from-accent-50/80 to-transparent' : 'bg-primary-50/30',
-                )}
-              >
-                <div
-                  className={cn(
-                    'w-8 h-8 rounded-lg flex items-center justify-center font-bold font-serif-cn text-sm flex-shrink-0',
-                    staff.rank === 1 && 'bg-gradient-to-br from-amber-400 to-amber-600 text-white',
-                    staff.rank === 2 && 'bg-gradient-to-br from-slate-300 to-slate-500 text-white',
-                    staff.rank === 3 && 'bg-gradient-to-br from-orange-400 to-orange-600 text-white',
-                    staff.rank > 3 && 'bg-primary-100 text-primary-600',
-                  )}
-                >
-                  {staff.rank}
+              <div className="flex flex-col lg:flex-row items-center gap-6">
+                <div className="flex-1" style={{ height: 260, minWidth: 260 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={wastageData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={65}
+                        outerRadius={110}
+                        paddingAngle={2}
+                        dataKey="percentage"
+                        nameKey="reason"
+                        labelLine={false}
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                          if (percent < 0.06) return null;
+                          const RADIAN = Math.PI / 180;
+                          const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text
+                              x={x}
+                              y={y}
+                              fill="#ffffff"
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                              fontSize={12}
+                              fontWeight={600}
+                            >
+                              {`${(percent * 100).toFixed(0)}%`}
+                            </text>
+                          );
+                        }}
+                      >
+                        {wastageData.map((_, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={WASTAGE_COLORS[index % WASTAGE_COLORS.length]}
+                            stroke="#ffffff"
+                            strokeWidth={2}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#102a43',
+                          border: 'none',
+                          borderRadius: '8px',
+                        }}
+                        formatter={(value: number) => [`${value.toFixed(1)}%`, '占比']}
+                        labelStyle={{ color: '#f97316', fontWeight: 600 }}
+                        itemStyle={{ color: '#ffffff' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium text-primary-800 truncate">{staff.staffName}</span>
-                    {getTrendIcon(staff.trend)}
+                <div className="flex-1 min-w-[240px] w-full space-y-2.5">
+                  {wastageData.map((item, index) => {
+                    const color = WASTAGE_COLORS[index % WASTAGE_COLORS.length];
+                    return (
+                      <div
+                        key={item.reason}
+                        className="p-3 rounded-xl bg-primary-50/60 hover:bg-primary-50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: color }}
+                            />
+                            <span className="text-sm font-medium text-primary-700">
+                              {item.reason}
+                            </span>
+                          </div>
+                          <span
+                            className="text-sm font-semibold"
+                            style={{ color }}
+                          >
+                            {item.percentage.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-primary-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${(item.percentage / totalWastage) * 100}%`,
+                              backgroundColor: color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 card-shadow border border-primary-100/50">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-serif-cn text-xl font-semibold text-primary-800">
+                  后厨员工效率排名
+                </h2>
+                <span className="text-sm text-primary-500">TOP 8</span>
+              </div>
+              <div className="space-y-2.5">
+                {mockStaff.slice(0, 8).map((staff, idx) => (
+                  <div
+                    key={staff.staffId}
+                    className={cn(
+                      'flex items-center gap-4 p-3 rounded-xl transition-all animate-slide-up',
+                      idx < 3 ? 'bg-gradient-to-r from-accent-50/60 to-transparent' : 'hover:bg-primary-50/60'
+                    )}
+                    style={{ animationDelay: `${idx * 40}ms` }}
+                  >
+                    <RankingBadge rank={idx + 1} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-primary-800">
+                          {staff.staffName}
+                        </span>
+                        {staff.trend === 'up' && (
+                          <TrendingUp className="w-4 h-4 text-success" />
+                        )}
+                        {staff.trend === 'down' && (
+                          <TrendingDown className="w-4 h-4 text-danger" />
+                        )}
+                        {staff.trend === 'stable' && (
+                          <Minus className="w-4 h-4 text-primary-400" />
+                        )}
+                      </div>
+                      <p className="text-xs text-primary-400 truncate">{staff.storeName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-serif-cn font-bold text-lg text-primary-800">
+                        {formatCurrency(staff.output)}
+                      </p>
+                      <p className="text-xs text-primary-400">周产出</p>
+                    </div>
                   </div>
-                  <div className="text-xs text-primary-400 truncate">{staff.storeName}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <div className="font-bold font-serif-cn text-primary-800">{formatCurrency(staff.output)}</div>
-                  <div className="text-[10px] text-primary-400">人均产出/周</div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-6 card-shadow">
-        <div className="flex items-center gap-2 mb-5">
-          <div className="w-8 h-8 rounded-lg gradient-margin flex items-center justify-center">
-            <Lightbulb size={16} className="text-white" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold font-serif-cn text-primary-800">AI智能优化建议</h3>
-            <p className="text-xs text-primary-400">基于数据分析生成的运营优化方案，预计可提升整体毛利1-3%</p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {report.suggestions.map((suggestion, idx) => (
-            <div
-              key={idx}
-              className="flex items-start gap-3 p-4 rounded-xl bg-gradient-to-r from-primary-50/60 to-transparent border border-primary-100"
-            >
-              <div className="w-7 h-7 rounded-lg gradient-primary flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-xs font-bold font-serif-cn">{idx + 1}</span>
-              </div>
-              <p className="text-sm text-primary-700 leading-relaxed pt-0.5">{suggestion}</p>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center">
+                <Lightbulb className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="font-serif-cn text-xl font-semibold text-primary-800">
+                  AI智能优化建议
+                </h2>
+                <p className="text-sm text-primary-500">基于数据分析的可执行改进方案</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {suggestions.map((suggestion, idx) => (
+                <div
+                  key={idx}
+                  className={cn(
+                    'relative overflow-hidden rounded-2xl p-5 card-shadow card-shadow-hover animate-slide-up text-white',
+                    idx % 5 === 0 && 'gradient-primary',
+                    idx % 5 === 1 && 'gradient-revenue',
+                    idx % 5 === 2 && 'gradient-margin',
+                    idx % 5 === 3 && 'gradient-wastage',
+                    idx % 5 === 4 && 'gradient-output'
+                  )}
+                  style={{ animationDelay: `${idx * 60}ms` }}
+                >
+                  <div className="absolute -top-10 -right-10 w-32 h-32 rounded-full bg-white/10"></div>
+                  <div className="absolute -bottom-14 -left-14 w-40 h-40 rounded-full bg-white/5"></div>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                        <span className="font-serif-cn font-bold text-white text-sm">
+                          {String(idx + 1).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <span className="text-xs text-white/70 font-medium">优化建议</span>
+                    </div>
+                    <p className="text-sm text-white/90 leading-relaxed">{suggestion}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+export default Report;

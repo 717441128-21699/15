@@ -1,47 +1,72 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppLayout } from '@/components/layout/AppLayout';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import StoreDetail from '@/pages/StoreDetail';
-import Alerts from '@/pages/Alerts';
-import Procurement from '@/pages/Procurement';
-import Report from '@/pages/Report';
-import AppLayout from '@/components/layout/AppLayout';
+import { Alerts } from '@/pages/Alerts';
+import { Procurement } from '@/pages/Procurement';
+import { Report } from '@/pages/Report';
 import { useAppStore } from '@/store';
-import { useEffect } from 'react';
+import type { ReactNode } from 'react';
+import type { UserRole } from '@/types';
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { user, hydrate } = useAppStore();
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
-  if (!user) {
+interface RequireAuthProps {
+  children: ReactNode;
+  allowedRoles?: UserRole[];
+}
+
+function RequireAuth({ children, allowedRoles }: RequireAuthProps) {
+  const { isAuthenticated, user } = useAppStore();
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return <>{children}</>;
 }
 
-export default function App() {
+function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+    <Routes>
+      <Route path="/login" element={<Login />} />
+
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
+        }
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+
+        <Route path="dashboard" element={<Dashboard />} />
+
+        <Route path="store/:id" element={<StoreDetail />} />
+
+        <Route path="alerts" element={<Alerts />} />
+
         <Route
-          path="/"
+          path="procurement"
           element={
-            <RequireAuth>
-              <AppLayout />
+            <RequireAuth allowedRoles={['headquarters', 'region']}>
+              <Procurement />
             </RequireAuth>
           }
-        >
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="store/:id" element={<StoreDetail />} />
-          <Route path="alerts" element={<Alerts />} />
-          <Route path="procurement" element={<Procurement />} />
-          <Route path="report" element={<Report />} />
-        </Route>
+        />
+
+        <Route path="report" element={<Report />} />
+
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
-    </Router>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 }
+
+export default App;

@@ -1,12 +1,10 @@
 /** @type {import('tailwindcss').Config} */
-
 export default {
-  darkMode: "class",
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
   theme: {
-    container: {
-      center: true,
-    },
     extend: {
       colors: {
         primary: {
@@ -15,32 +13,32 @@ export default {
           200: '#bcccdc',
           300: '#9fb3c8',
           400: '#829ab1',
-          500: '#1e3a5f',
-          600: '#162d4a',
-          700: '#0f1f33',
-          800: '#091321',
-          900: '#04070d',
+          500: '#627d98',
+          600: '#486581',
+          700: '#334e68',
+          800: '#243b53',
+          900: '#102a43',
         },
         accent: {
-          50: '#fff5ec',
-          100: '#ffe6cc',
-          200: '#ffc899',
-          300: '#ffab66',
-          400: '#f29240',
-          500: '#e8823b',
-          600: '#c96a2a',
-          700: '#a85520',
-          800: '#87411a',
-          900: '#662f12',
+          50: '#fff7ed',
+          100: '#ffedd5',
+          200: '#fed7aa',
+          300: '#fdba74',
+          400: '#fb923c',
+          500: '#f97316',
+          600: '#ea580c',
+          700: '#c2410c',
+          800: '#9a3412',
+          900: '#7c2d12',
         },
-        success: '#16a34a',
+        success: '#10b981',
         warning: '#f59e0b',
-        danger: '#dc2626',
+        danger: '#ef4444',
         info: '#0ea5e9',
       },
       fontFamily: {
-        serif: ['"Noto Serif SC"', 'serif'],
-        sans: ['"Noto Sans SC"', 'sans-serif'],
+        'serif-cn': ['"Noto Serif SC"', 'serif'],
+        'sans-cn': ['"Noto Sans SC"', 'system-ui', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',
@@ -52,11 +50,11 @@ export default {
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       },
     },
   },
   plugins: [],
-};
+}

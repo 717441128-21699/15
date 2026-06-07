@@ -1,126 +1,212 @@
-import { Router, type Request, type Response } from 'express';
-import { mockAlerts } from '../mock/data.js';
-import type { Alert, AlertStatus, UserRole } from '../../src/types/index.js';
+import { Router, Response } from 'express';
+import { AuthRequest } from '../app.js';
+import { alerts, stores, users, filterDataByRole } from '../mock/data.js';
 
 const router = Router();
 
-let alertsData = [...mockAlerts];
+const getStoreName = (storeId: string) => stores.find((s) => s.id === storeId)?.name || storeId;
+const getUserName = (userId?: string) => users.find((u) => u.id === userId)?.name || '-';
 
-router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const role = req.headers['x-user-role'] as UserRole;
-  const storeId = req.headers['x-user-store-id'] as string;
-  const regionId = req.headers['x-user-region-id'] as string;
-  const { level, status } = req.query as { level?: string; status?: string };
+router.get('/', (req: AuthRequest, res: Response) => {
+  const {
+    status,
+    level,
+    type,
+    storeId,
+    page = '1',
+    pageSize = '20',
+  } = req.query;
 
-  let alerts = [...alertsData];
+  let filteredAlerts = filterDataByRole(alerts, req.userRole!, req.userRegion, req.userStoreId);
 
-  if (role === 'store' && storeId) {
-    alerts = alerts.filter((a) => a.storeId === storeId);
-  }
-
-  if (level) {
-    alerts = alerts.filter((a) => a.level === level);
-  }
   if (status) {
-    alerts = alerts.filter((a) => a.status === status);
+    filteredAlerts = filteredAlerts.filter((a) => a.status === status);
+  }
+  if (level) {
+    filteredAlerts = filteredAlerts.filter((a) => a.level === level);
+  }
+  if (type) {
+    filteredAlerts = filteredAlerts.filter((a) => a.type === type);
+  }
+  if (storeId) {
+    filteredAlerts = filteredAlerts.filter((a) => a.storeId === storeId);
   }
 
-  alerts.sort((a, b) => {
-    const levelOrder: Record<string, number> = { level2: 0, level1: 1 };
-    const statusOrder: Record<string, number> = { pending: 0, confirmed: 1, reviewed: 2, approved: 3, resolved: 4, expired: 5 };
-    if (levelOrder[a.level] !== levelOrder[b.level]) return levelOrder[a.level] - levelOrder[b.level];
-    return statusOrder[a.status] - statusOrder[b.status];
-  });
+  const pageNum = parseInt(page as string, 10);
+  const pageSizeNum = parseInt(pageSize as string, 10);
+  const start = (pageNum - 1) * pageSizeNum;
+  const end = start + pageSizeNum;
 
-  res.json({ success: true, data: alerts });
+  const paginatedAlerts = filteredAlerts.slice(start, end).map((alert) => ({
+    ...alert,
+    storeName: getStoreName(alert.storeId),
+  }));
+
+  const statusStats = {
+    pending: filteredAlerts.filter((a) => a.status === 'pending').length,
+    confirmed: filteredAlerts.filter((a) => a.status === 'confirmed').length,
+    reviewed: filteredAlerts.filter((a) => a.status === 'reviewed').length,
+    approved: filteredAlerts.filter((a) => a.status === 'approved').length,
+    resolved: filteredAlerts.filter((a) => a.status === 'resolved').length,
+  };
+
+  const levelStats = {
+    level1: filteredAlerts.filter((a) => a.level === 'level1').length,
+    level2: filteredAlerts.filter((a) => a.level === 'level2').length,
+  };
+
+  res.json({
+    code: 200,
+    message: '获取预警列表成功',
+    data: {
+      list: paginatedAlerts,
+      total: filteredAlerts.length,
+      page: pageNum,
+      pageSize: pageSizeNum,
+      totalPages: Math.ceil(filteredAlerts.length / pageSizeNum),
+      statusStats,
+      levelStats,
+    },
+  });
 });
 
-router.post('/:id/confirm', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { comment, userName, userId } = req.body as { comment?: string; userName: string; userId: string };
+router.get('/:id', (req: AuthRequest, res: Response) => {
+  const filteredAlerts = filterDataByRole(alerts, req.userRole!, req.userRegion, req.userStoreId);
+  const alert = filteredAlerts.find((a) => a.id === req.params.id);
 
-  const alert = alertsData.find((a) => a.id === id);
   if (!alert) {
-    res.status(404).json({ success: false, message: '预警不存在' });
-    return;
+    return res.status(404).json({ code: 404, message: '预警不存在或无权限访问' });
+  }
+
+  res.json({
+    code: 200,
+    message: '获取预警详情成功',
+    data: {
+      ...alert,
+      storeName: getStoreName(alert.storeId),
+    },
+  });
+});
+
+router.post('/:id/confirm', (req: AuthRequest, res: Response) => {
+  const alert = alerts.find((a) => a.id === req.params.id);
+
+  if (!alert) {
+    return res.status(404).json({ code: 404, message: '预警不存在' });
+  }
+
+  if (alert.status !== 'pending') {
+    return res.status(400).json({ code: 400, message: '当前预警状态不允许确认操作' });
   }
 
   alert.status = 'confirmed';
-  alert.approvalFlow = {
-    ...alert.approvalFlow,
-    storeManagerConfirm: {
-      userId,
-      userName,
-      status: 'approved',
-      comment,
-      timestamp: new Date().toISOString(),
-    },
+  alert.approvalFlow = alert.approvalFlow || {};
+  alert.approvalFlow.storeManagerConfirm = {
+    userId: req.user?.id || '',
+    userName: req.user?.name || '',
+    status: 'approved',
+    timestamp: new Date().toISOString(),
   };
 
-  res.json({ success: true, data: alert });
+  res.json({
+    code: 200,
+    message: '预警确认成功',
+    data: {
+      ...alert,
+      storeName: getStoreName(alert.storeId),
+    },
+  });
 });
 
-router.post('/:id/review', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { comment, userName, userId } = req.body as { comment?: string; userName: string; userId: string };
+router.post('/:id/review', (req: AuthRequest, res: Response) => {
+  const alert = alerts.find((a) => a.id === req.params.id);
 
-  const alert = alertsData.find((a) => a.id === id);
   if (!alert) {
-    res.status(404).json({ success: false, message: '预警不存在' });
-    return;
+    return res.status(404).json({ code: 404, message: '预警不存在' });
+  }
+
+  if (alert.status !== 'confirmed') {
+    return res.status(400).json({ code: 400, message: '当前预警状态不允许审核操作' });
+  }
+
+  if (req.userRole === 'store') {
+    return res.status(403).json({ code: 403, message: '门店角色无审核权限' });
   }
 
   alert.status = 'reviewed';
-  alert.approvalFlow = {
-    ...alert.approvalFlow,
-    regionManagerReview: {
-      userId,
-      userName,
-      status: 'approved',
-      comment,
-      timestamp: new Date().toISOString(),
-    },
+  alert.approvalFlow = alert.approvalFlow || {};
+  alert.approvalFlow.regionManagerReview = {
+    userId: req.user?.id || '',
+    userName: req.user?.name || '',
+    status: 'approved',
+    timestamp: new Date().toISOString(),
   };
 
-  res.json({ success: true, data: alert });
+  res.json({
+    code: 200,
+    message: '预警审核成功',
+    data: {
+      ...alert,
+      storeName: getStoreName(alert.storeId),
+    },
+  });
 });
 
-router.post('/:id/approve', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { comment, userName, userId } = req.body as { comment?: string; userName: string; userId: string };
+router.post('/:id/approve', (req: AuthRequest, res: Response) => {
+  const alert = alerts.find((a) => a.id === req.params.id);
 
-  const alert = alertsData.find((a) => a.id === id);
   if (!alert) {
-    res.status(404).json({ success: false, message: '预警不存在' });
-    return;
+    return res.status(404).json({ code: 404, message: '预警不存在' });
+  }
+
+  if (alert.status !== 'reviewed') {
+    return res.status(400).json({ code: 400, message: '当前预警状态不允许审批操作' });
+  }
+
+  if (req.userRole !== 'headquarters') {
+    return res.status(403).json({ code: 403, message: '仅总部角色有审批权限' });
   }
 
   alert.status = 'approved';
-  alert.approvalFlow = {
-    ...alert.approvalFlow,
-    hqDirectorApprove: {
-      userId,
-      userName,
-      status: 'approved',
-      comment,
-      timestamp: new Date().toISOString(),
-    },
+  alert.approvalFlow = alert.approvalFlow || {};
+  alert.approvalFlow.hqDirectorApprove = {
+    userId: req.user?.id || '',
+    userName: req.user?.name || '',
+    status: 'approved',
+    timestamp: new Date().toISOString(),
   };
 
-  res.json({ success: true, data: alert });
+  res.json({
+    code: 200,
+    message: '预警审批成功',
+    data: {
+      ...alert,
+      storeName: getStoreName(alert.storeId),
+    },
+  });
 });
 
-router.post('/:id/resolve', async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
+router.post('/:id/resolve', (req: AuthRequest, res: Response) => {
+  const alert = alerts.find((a) => a.id === req.params.id);
 
-  const alert = alertsData.find((a) => a.id === id);
   if (!alert) {
-    res.status(404).json({ success: false, message: '预警不存在' });
-    return;
+    return res.status(404).json({ code: 404, message: '预警不存在' });
+  }
+
+  if (!['confirmed', 'reviewed', 'approved'].includes(alert.status)) {
+    return res.status(400).json({ code: 400, message: '当前预警状态不允许解决操作' });
   }
 
   alert.status = 'resolved';
-  res.json({ success: true, data: alert });
+
+  res.json({
+    code: 200,
+    message: '预警已解决',
+    data: {
+      ...alert,
+      storeName: getStoreName(alert.storeId),
+    },
+  });
 });
 
 export default router;

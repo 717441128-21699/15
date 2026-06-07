@@ -1,80 +1,100 @@
-import express, {
-  type Request,
-  type Response,
-  type NextFunction,
-} from 'express'
-import cors from 'cors'
-import path from 'path'
-import dotenv from 'dotenv'
-import { fileURLToPath } from 'url'
-import authRoutes from './routes/auth.js'
-import storesRoutes from './routes/stores.js'
-import kpiRoutes from './routes/kpi.js'
-import dishesRoutes from './routes/dishes.js'
-import alertsRoutes from './routes/alerts.js'
-import procurementRoutes from './routes/procurement.js'
-import reportRoutes from './routes/report.js'
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import { users, User, Region, UserRole } from './mock/data.js';
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+import authRouter from './routes/auth.js';
+import storesRouter from './routes/stores.js';
+import kpiRouter from './routes/kpi.js';
+import dishesRouter from './routes/dishes.js';
+import alertsRouter from './routes/alerts.js';
+import procurementRouter from './routes/procurement.js';
+import reportRouter from './routes/report.js';
 
-dotenv.config()
+export interface AuthRequest extends Request {
+  user?: User;
+  userRole?: UserRole;
+  userRegion?: Region;
+  userStoreId?: string;
+}
 
-const app: express.Application = express()
+const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.path === '/api/auth/login') {
+    return next();
+  }
 
-app.use(cors())
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+  const authHeader = req.headers.authorization;
+  const userRole = req.headers['x-user-role'] as string;
+  const userRegion = req.headers['x-user-region'] as string;
+  const userStoreId = req.headers['x-user-store-id'] as string;
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization
-  const token = authHeader?.replace('Bearer ', '')
-  if (token) {
-    const idPart = token.replace('token-', '')
-    if (idPart.startsWith('hq')) {
-      req.headers['x-user-role'] = 'headquarters'
-    } else if (idPart.startsWith('rg')) {
-      req.headers['x-user-role'] = 'region'
-      req.headers['x-user-region-id'] = 'east'
-    } else if (idPart.startsWith('st')) {
-      req.headers['x-user-role'] = 'store'
-      req.headers['x-user-store-id'] = idPart.toUpperCase()
+  if (!userRole || !['headquarters', 'region', 'store'].includes(userRole)) {
+    return res.status(401).json({ code: 401, message: '未授权访问，请设置正确的 x-user-role 请求头' });
+  }
+
+  let user: User | undefined;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.replace('Bearer ', '');
+    user = users.find((u) => u.id === token);
+  }
+
+  if (!user) {
+    if (userRole === 'store' && userStoreId) {
+      user = users.find((u) => u.role === 'store' && u.storeId === userStoreId);
+    } else if (userRole === 'region' && userRegion) {
+      user = users.find((u) => u.role === 'region' && u.region === userRegion);
+    } else if (userRole === 'headquarters') {
+      user = users.find((u) => u.role === 'headquarters');
     }
   }
-  next()
-})
 
-app.use('/api/auth', authRoutes)
-app.use('/api/stores', storesRoutes)
-app.use('/api/kpi', kpiRoutes)
-app.use('/api/dishes', dishesRoutes)
-app.use('/api/alerts', alertsRoutes)
-app.use('/api/procurement', procurementRoutes)
-app.use('/api/report', reportRoutes)
+  if (!user) {
+    return res.status(401).json({ code: 401, message: '用户信息无效' });
+  }
 
-app.use(
-  '/api/health',
-  (req: Request, res: Response, next: NextFunction): void => {
-    res.status(200).json({
-      success: true,
-      message: 'ok',
-    })
-  },
-)
+  req.user = user;
+  req.userRole = user.role;
+  req.userRegion = user.region;
+  req.userStoreId = user.storeId;
 
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error(error)
-  res.status(500).json({
-    success: false,
-    error: 'Server internal error',
-  })
-})
+  next();
+};
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use((req: AuthRequest, res: Response, next: NextFunction) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+app.use('/api/auth', authRouter);
+app.use('/api/stores', authMiddleware, storesRouter);
+app.use('/api/kpi', authMiddleware, kpiRouter);
+app.use('/api/dishes', authMiddleware, dishesRouter);
+app.use('/api/alerts', authMiddleware, alertsRouter);
+app.use('/api/procurement', authMiddleware, procurementRouter);
+app.use('/api/report', authMiddleware, reportRouter);
+
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({
+    code: 200,
+    message: '味道轩餐饮智能平台 API 服务正常运行',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+  });
+});
 
 app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    error: 'API not found',
-  })
-})
+  res.status(404).json({ code: 404, message: '请求的资源不存在' });
+});
 
-export default app
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Server error:', err);
+  res.status(500).json({ code: 500, message: '服务器内部错误', error: err.message });
+});
+
+export default app;

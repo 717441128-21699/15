@@ -2,71 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-primary-50 text-primary-900;
+    min-height: 100vh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Noto Serif SC', serif;
+  }
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background-color: #f0f4f8;
-  color: #091321;
+@layer components {
+  .gradient-primary {
+    background: linear-gradient(135deg, #102a43 0%, #334e68 50%, #486581 100%);
+  }
+
+  .gradient-revenue {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 50%, #3d7ab5 100%);
+  }
+
+  .gradient-margin {
+    background: linear-gradient(135deg, #065f46 0%, #047857 50%, #10b981 100%);
+  }
+
+  .gradient-wastage {
+    background: linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #ea580c 100%);
+  }
+
+  .gradient-turnover {
+    background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 50%, #a78bfa 100%);
+  }
+
+  .gradient-output {
+    background: linear-gradient(135deg, #9a3412 0%, #c2410c 50%, #f97316 100%);
+  }
+
+  .card-shadow {
+    box-shadow: 0 1px 3px 0 rgba(16, 42, 67, 0.08),
+                0 1px 2px -1px rgba(16, 42, 67, 0.06),
+                0 4px 12px -2px rgba(16, 42, 67, 0.06);
+  }
+
+  .card-shadow-hover {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .card-shadow-hover:hover {
+    box-shadow: 0 10px 25px -5px rgba(16, 42, 67, 0.1),
+                0 8px 10px -6px rgba(16, 42, 67, 0.08);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary {
+    @apply bg-primary-700 hover:bg-primary-800 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .btn-accent {
+    @apply bg-accent-500 hover:bg-accent-600 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .btn-outline {
+    @apply border border-primary-300 text-primary-700 hover:bg-primary-50 font-medium px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .input-base {
+    @apply w-full px-3 py-2 border border-primary-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white;
+  }
 }
 
 @layer utilities {
-  .font-serif-cn {
-    font-family: "Noto Serif SC", serif;
-  }
-  .font-sans-cn {
-    font-family: "Noto Sans SC", sans-serif;
-  }
-  .card-shadow {
-    box-shadow: 0 1px 3px rgba(15, 31, 51, 0.08), 0 1px 2px rgba(15, 31, 51, 0.06);
-  }
-  .card-shadow-hover {
-    box-shadow: 0 4px 12px rgba(15, 31, 51, 0.1), 0 2px 4px rgba(15, 31, 51, 0.08);
-  }
-  .gradient-primary {
-    background: linear-gradient(135deg, #1e3a5f 0%, #162d4a 100%);
-  }
-  .gradient-accent {
-    background: linear-gradient(135deg, #e8823b 0%, #c96a2a 100%);
-  }
-  .gradient-revenue {
-    background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8a 100%);
-  }
-  .gradient-margin {
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  }
-  .gradient-wastage {
-    background: linear-gradient(135deg, #e8823b 0%, #dc2626 100%);
-  }
-  .gradient-turnover {
-    background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
-  }
-  .gradient-output {
-    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
-  }
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: #9fb3c8 transparent;
   }
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
+
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
+
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: #9fb3c8;
     border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #829ab1;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .font-serif-cn {
+    font-family: 'Noto Serif SC', serif;
+  }
+
+  .font-sans-cn {
+    font-family: 'Noto Sans SC', system-ui, sans-serif;
   }
 }

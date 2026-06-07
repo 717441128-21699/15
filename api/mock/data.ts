@@ -1,426 +1,852 @@
-import {
-  User,
-  Store,
-  KPIData,
-  RegionHeatmapData,
-  DishMargin,
-  SalesTrend,
-  WastageCategory,
-  Alert,
-  ForecastItem,
-  SupplierQuote,
-  HealthReport,
-  TimeSlotData,
-} from '../../src/types';
+export type UserRole = 'headquarters' | 'region' | 'store';
 
-export const mockUsers: User[] = [
+export type Region = 'east' | 'north' | 'south' | 'west' | 'central';
+
+export interface User {
+  id: string;
+  username: string;
+  password: string;
+  name: string;
+  role: UserRole;
+  region?: Region;
+  storeId?: string;
+  avatar?: string;
+  phone: string;
+  email: string;
+}
+
+export interface Store {
+  id: string;
+  name: string;
+  city: string;
+  province: string;
+  brand: string;
+  address: string;
+  region: Region;
+  regionId: Region;
+  manager: string;
+  phone: string;
+  openDate: string;
+  area: number;
+  seats: number;
+  totalTables: number;
+  staffCount: number;
+  status: 'open' | 'closed' | 'renovation';
+}
+
+export interface DailyKPI {
+  date: string;
+  storeId: string;
+  revenue: number;
+  orders: number;
+  avgOrderValue: number;
+  customers: number;
+  foodCost: number;
+  laborCost: number;
+  rentCost: number;
+  otherCost: number;
+  profit: number;
+  profitMargin: number;
+  foodCostRate: number;
+  laborCostRate: number;
+  turnoverRate: number;
+  satisfaction: number;
+}
+
+export interface Dish {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  cost: number;
+  grossMargin: number;
+  salesCount: number;
+  salesAmount: number;
+  storeId: string;
+}
+
+export interface ApprovalStep {
+  userId: string;
+  userName: string;
+  status: 'pending' | 'approved' | 'rejected';
+  comment?: string;
+  timestamp?: string;
+}
+
+export interface ApprovalFlow {
+  storeManagerConfirm?: ApprovalStep;
+  regionManagerReview?: ApprovalStep;
+  hqDirectorApprove?: ApprovalStep;
+}
+
+export interface Alert {
+  id: string;
+  storeId: string;
+  storeName?: string;
+  type: 'wastage' | 'turnover';
+  level: 'level1' | 'level2';
+  status: 'pending' | 'confirmed' | 'reviewed' | 'approved' | 'resolved' | 'expired';
+  metricValue: number;
+  threshold: number;
+  consecutiveDays: number;
+  createdAt: string;
+  suggestion: string;
+  approvalFlow?: ApprovalFlow;
+}
+
+export interface TimeSlotData {
+  storeId: string;
+  date: string;
+  slots: Array<{
+    time: string;
+    revenue: number;
+    orders: number;
+    customers: number;
+  }>;
+}
+
+export interface WasteCategory {
+  storeId: string;
+  date: string;
+  categories: Array<{
+    name: string;
+    amount: number;
+    percentage: number;
+  }>;
+}
+
+export interface Promotion {
+  id: string;
+  storeId: string;
+  name: string;
+  type: 'discount' | 'coupon' | 'bundle' | 'special';
+  startDate: string;
+  endDate: string;
+  discount: number;
+  status: 'draft' | 'active' | 'ended';
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface SupplierQuote {
+  id: string;
+  supplierName: string;
+  itemName: string;
+  unit: string;
+  price: number;
+  quantity: number;
+  validFrom: string;
+  validTo: string;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface DemandForecast {
+  date: string;
+  storeId: string;
+  items: Array<{
+    name: string;
+    category: string;
+    forecastQuantity: number;
+    actualQuantity?: number;
+    unit: string;
+    confidence: number;
+  }>;
+}
+
+export interface WeeklyReport {
+  id: string;
+  week: string;
+  startDate: string;
+  endDate: string;
+  storeId?: string;
+  overallScore: number;
+  revenueScore: number;
+  costScore: number;
+  qualityScore: number;
+  serviceScore: number;
+  highlights: string[];
+  issues: string[];
+  recommendations: string[];
+}
+
+export interface HeatmapData {
+  storeId: string;
+  day: string;
+  data: Array<{
+    hour: number;
+    value: number;
+  }>;
+}
+
+const cities: { city: string; region: Region }[] = [
+  { city: '上海', region: 'east' },
+  { city: '北京', region: 'north' },
+  { city: '广州', region: 'south' },
+  { city: '深圳', region: 'south' },
+  { city: '杭州', region: 'east' },
+  { city: '成都', region: 'west' },
+  { city: '南京', region: 'east' },
+  { city: '武汉', region: 'central' },
+];
+
+const cityToProvince: Record<string, string> = {
+  '上海': '上海市',
+  '北京': '北京市',
+  '广州': '广东省',
+  '深圳': '广东省',
+  '杭州': '浙江省',
+  '成都': '四川省',
+  '南京': '江苏省',
+  '武汉': '湖北省',
+};
+
+export const stores: Store[] = cities.map((c, i) => ({
+  id: `STORE${String(i + 1).padStart(3, '0')}`,
+  name: `味道轩·${c.city}${['旗舰店', '中心店', '万象城店', '大悦城店', '万达广场店', '太古里店', '德基店', '光谷店'][i]}`,
+  city: c.city,
+  province: cityToProvince[c.city] || c.city,
+  brand: '味道轩',
+  address: `${c.city}市${['浦东新区陆家嘴', '朝阳区建国路', '天河区天河路', '南山区科技园', '西湖区文三路', '锦江区春熙路', '玄武区中山路', '洪山区光谷广场'][i]}${100 + i * 20}号`,
+  region: c.region,
+  regionId: c.region,
+  manager: ['张伟', '李娜', '王强', '刘芳', '陈明', '赵丽', '孙磊', '周婷'][i],
+  phone: `138${String(10000000 + i * 123456).padStart(8, '0')}`,
+  openDate: `202${1 + (i % 3)}-${String((i % 12) + 1).padStart(2, '0')}-${String((i * 3) % 28 + 1).padStart(2, '0')}`,
+  area: 180 + i * 30,
+  seats: 80 + i * 10,
+  totalTables: 30 + i * 3,
+  staffCount: 15 + i * 3,
+  status: 'open',
+}));
+
+export const users: User[] = [
   {
-    id: 'hq001',
-    name: '张运营',
+    id: 'U001',
+    username: 'admin',
+    password: '123456',
+    name: '系统管理员',
     role: 'headquarters',
+    phone: '13900000001',
+    email: 'admin@weidaoxuan.com',
   },
   {
-    id: 'rg001',
-    name: '李经理',
+    id: 'U002',
+    username: 'east_region',
+    password: '123456',
+    name: '华东区经理',
     role: 'region',
-    regionId: 'east',
+    region: 'east',
+    phone: '13900000002',
+    email: 'east@weidaoxuan.com',
   },
   {
-    id: 'st001',
-    name: '王店长',
-    role: 'store',
-    storeId: 'SH001',
+    id: 'U003',
+    username: 'north_region',
+    password: '123456',
+    name: '华北区经理',
+    role: 'region',
+    region: 'north',
+    phone: '13900000003',
+    email: 'north@weidaoxuan.com',
   },
+  {
+    id: 'U004',
+    username: 'south_region',
+    password: '123456',
+    name: '华南区经理',
+    role: 'region',
+    region: 'south',
+    phone: '13900000004',
+    email: 'south@weidaoxuan.com',
+  },
+  {
+    id: 'U005',
+    username: 'west_region',
+    password: '123456',
+    name: '西南区经理',
+    role: 'region',
+    region: 'west',
+    phone: '13900000005',
+    email: 'west@weidaoxuan.com',
+  },
+  {
+    id: 'U006',
+    username: 'central_region',
+    password: '123456',
+    name: '华中区经理',
+    role: 'region',
+    region: 'central',
+    phone: '13900000006',
+    email: 'central@weidaoxuan.com',
+  },
+  ...stores.map((store, i) => ({
+    id: `U${String(10 + i).padStart(3, '0')}`,
+    username: `store${i + 1}`,
+    password: '123456',
+    name: `${store.city}店店长`,
+    role: 'store' as UserRole,
+    storeId: store.id,
+    phone: store.phone,
+    email: `store${i + 1}@weidaoxuan.com`,
+  })),
 ];
 
-export const mockStores: Store[] = [
-  {
-    id: 'SH001',
-    name: '上海陆家嘴店',
-    city: '上海',
-    province: '上海',
-    brand: '味道轩',
-    address: '上海市浦东新区陆家嘴环路1000号',
-    totalTables: 48,
-    staffCount: 32,
-    regionId: 'east',
-    healthStatus: 'good',
-    todayTurnover: 3.2,
-    todayWastage: 4.2,
-  },
-  {
-    id: 'SH002',
-    name: '上海人民广场店',
-    city: '上海',
-    province: '上海',
-    brand: '味道轩',
-    address: '上海市黄浦区南京东路200号',
-    totalTables: 36,
-    staffCount: 28,
-    regionId: 'east',
-    healthStatus: 'average',
-    todayTurnover: 2.6,
-    todayWastage: 5.8,
-  },
-  {
-    id: 'BJ001',
-    name: '北京国贸店',
-    city: '北京',
-    province: '北京',
-    brand: '味道轩',
-    address: '北京市朝阳区建国门外大街1号',
-    totalTables: 52,
-    staffCount: 38,
-    regionId: 'north',
-    healthStatus: 'excellent',
-    todayTurnover: 3.8,
-    todayWastage: 3.1,
-  },
-  {
-    id: 'BJ002',
-    name: '北京三里屯店',
-    city: '北京',
-    province: '北京',
-    brand: '味道轩',
-    address: '北京市朝阳区三里屯路19号',
-    totalTables: 42,
-    staffCount: 30,
-    regionId: 'north',
-    healthStatus: 'good',
-    todayTurnover: 3.4,
-    todayWastage: 3.9,
-  },
-  {
-    id: 'GZ001',
-    name: '广州天河城店',
-    city: '广州',
-    province: '广东',
-    brand: '味道轩',
-    address: '广州市天河区天河路208号',
-    totalTables: 40,
-    staffCount: 28,
-    regionId: 'south',
-    healthStatus: 'poor',
-    todayTurnover: 2.1,
-    todayWastage: 6.5,
-  },
-  {
-    id: 'SZ001',
-    name: '深圳万象城店',
-    city: '深圳',
-    province: '广东',
-    brand: '味道轩',
-    address: '深圳市罗湖区宝安南路1881号',
-    totalTables: 45,
-    staffCount: 32,
-    regionId: 'south',
-    healthStatus: 'good',
-    todayTurnover: 3.1,
-    todayWastage: 4.0,
-  },
-  {
-    id: 'HZ001',
-    name: '杭州西湖店',
-    city: '杭州',
-    province: '浙江',
-    brand: '味道轩',
-    address: '杭州市西湖区延安路98号',
-    totalTables: 38,
-    staffCount: 26,
-    regionId: 'east',
-    healthStatus: 'excellent',
-    todayTurnover: 3.6,
-    todayWastage: 3.2,
-  },
-  {
-    id: 'CD001',
-    name: '成都春熙路店',
-    city: '成都',
-    province: '四川',
-    brand: '味道轩',
-    address: '成都市锦江区春熙路东段1号',
-    totalTables: 44,
-    staffCount: 30,
-    regionId: 'west',
-    healthStatus: 'average',
-    todayTurnover: 2.8,
-    todayWastage: 5.1,
-  },
-];
+const baseRevenues = [85000, 78000, 72000, 80000, 68000, 75000, 70000, 65000];
 
-export const mockKPIData: KPIData = {
-  totalRevenue: 12856400,
-  revenueYoY: 12.5,
-  revenueMoM: 8.3,
-  turnoverRate: 3.12,
-  turnoverRateYoY: 6.8,
-  turnoverRateMoM: 4.2,
-  grossMargin: 62.4,
-  grossMarginYoY: 2.1,
-  grossMarginMoM: 1.5,
-  wastageRate: 4.3,
-  wastageRateYoY: -1.2,
-  wastageRateMoM: -0.8,
-  outputPerCapita: 8640,
-  outputYoY: 9.2,
-  outputMoM: 5.6,
-};
-
-export const mockHeatmapData: RegionHeatmapData[] = [
-  { province: '北京', city: '北京', turnoverRate: 3.6, storeCount: 2, avgRevenue: 892000 },
-  { province: '上海', city: '上海', turnoverRate: 2.9, storeCount: 2, avgRevenue: 756000 },
-  { province: '广东', city: '广州', turnoverRate: 2.1, storeCount: 1, avgRevenue: 523000 },
-  { province: '广东', city: '深圳', turnoverRate: 3.1, storeCount: 1, avgRevenue: 712000 },
-  { province: '浙江', city: '杭州', turnoverRate: 3.6, storeCount: 1, avgRevenue: 689000 },
-  { province: '四川', city: '成都', turnoverRate: 2.8, storeCount: 1, avgRevenue: 612000 },
-  { province: '江苏', city: '南京', turnoverRate: 3.0, storeCount: 1, avgRevenue: 654000 },
-  { province: '湖北', city: '武汉', turnoverRate: 2.7, storeCount: 1, avgRevenue: 578000 },
-];
-
-export const mockDishMargins: DishMargin[] = [
-  { id: 'd001', name: '招牌红烧肉', category: '热菜', salesVolume: 12850, revenue: 514000, cost: 164480, grossMargin: 68 },
-  { id: 'd002', name: '松鼠鳜鱼', category: '热菜', salesVolume: 8420, revenue: 589400, cost: 200396, grossMargin: 66 },
-  { id: 'd003', name: '水晶虾仁', category: '热菜', salesVolume: 9650, revenue: 386000, cost: 146680, grossMargin: 62 },
-  { id: 'd004', name: '蒜蓉西兰花', category: '素菜', salesVolume: 15230, revenue: 228450, cost: 57112, grossMargin: 75 },
-  { id: 'd005', name: '蟹黄豆腐', category: '热菜', salesVolume: 7820, revenue: 273700, cost: 112217, grossMargin: 59 },
-  { id: 'd006', name: '糖醋里脊', category: '热菜', salesVolume: 11450, revenue: 343500, cost: 144270, grossMargin: 58 },
-  { id: 'd007', name: '宫保鸡丁', category: '热菜', salesVolume: 13800, revenue: 345000, cost: 141450, grossMargin: 59 },
-  { id: 'd008', name: '麻婆豆腐', category: '热菜', salesVolume: 16200, revenue: 275400, cost: 68850, grossMargin: 75 },
-  { id: 'd009', name: '清蒸鲈鱼', category: '海鲜', salesVolume: 6850, revenue: 479500, cost: 220570, grossMargin: 54 },
-  { id: 'd010', name: '扬州炒饭', category: '主食', salesVolume: 18500, revenue: 277500, cost: 69375, grossMargin: 75 },
-  { id: 'd011', name: '时蔬沙拉', category: '凉菜', salesVolume: 4200, revenue: 84000, cost: 42000, grossMargin: 50 },
-  { id: 'd012', name: '凉拌黄瓜', category: '凉菜', salesVolume: 7800, revenue: 78000, cost: 23400, grossMargin: 70 },
-];
-
-const generateSalesTrend = (): SalesTrend[] => {
-  const dishes = [
-    { dishId: 'd001', dishName: '招牌红烧肉' },
-    { dishId: 'd002', dishName: '松鼠鳜鱼' },
-    { dishId: 'd004', dishName: '蒜蓉西兰花' },
-    { dishId: 'd008', dishName: '麻婆豆腐' },
-    { dishId: 'd010', dishName: '扬州炒饭' },
-  ];
-  const trend: SalesTrend[] = [];
+function generateDailyKPIs(): DailyKPI[] {
+  const kpis: DailyKPI[] = [];
   const today = new Date();
-  for (let i = 6; i >= 0; i--) {
+
+  for (let dayOffset = 0; dayOffset < 90; dayOffset++) {
     const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-    trend.push({
-      date: dateStr,
-      dishes: dishes.map((d) => ({
-        ...d,
-        quantity: Math.floor(80 + Math.random() * 120 + (6 - i) * 8),
-        revenue: Math.floor(3000 + Math.random() * 5000 + (6 - i) * 300),
-      })),
+    date.setDate(date.getDate() - dayOffset);
+    const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    stores.forEach((store, i) => {
+      const baseRevenue = baseRevenues[i];
+      const weekendMultiplier = isWeekend ? 1.25 + (i % 3) * 0.05 : 1;
+      const randomFactor = 0.85 + Math.random() * 0.3;
+      const revenue = Math.round(baseRevenue * weekendMultiplier * randomFactor);
+
+      const orders = Math.round(revenue / (45 + Math.random() * 15));
+      const avgOrderValue = Math.round((revenue / orders) * 100) / 100;
+      const customers = Math.round(orders * (1.8 + Math.random() * 0.6));
+
+      const foodCost = Math.round(revenue * (0.32 + Math.random() * 0.08));
+      const laborCost = Math.round(revenue * (0.22 + Math.random() * 0.06));
+      const rentCost = Math.round(revenue * (0.08 + Math.random() * 0.03));
+      const otherCost = Math.round(revenue * (0.05 + Math.random() * 0.04));
+      const profit = revenue - foodCost - laborCost - rentCost - otherCost;
+
+      kpis.push({
+        date: dateStr,
+        storeId: store.id,
+        revenue,
+        orders,
+        avgOrderValue,
+        customers,
+        foodCost,
+        laborCost,
+        rentCost,
+        otherCost,
+        profit,
+        profitMargin: Math.round((profit / revenue) * 10000) / 100,
+        foodCostRate: Math.round((foodCost / revenue) * 10000) / 100,
+        laborCostRate: Math.round((laborCost / revenue) * 10000) / 100,
+        turnoverRate: Math.round(customers / store.seats * (1.5 + Math.random()) * 100) / 100,
+        satisfaction: Math.round((4.2 + Math.random() * 0.7) * 10) / 10,
+      });
     });
   }
-  return trend;
+
+  return kpis.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export const dailyKPIs: DailyKPI[] = generateDailyKPIs();
+
+const dishCategories = ['招牌菜', '热菜', '凉菜', '汤品', '主食', '饮品', '甜点'];
+const dishNames: Record<string, string[]> = {
+  招牌菜: ['轩酱秘制红烧肉', '招牌酸菜鱼', '味道轩烤鸭', '秘制酱骨', '金汤佛跳墙'],
+  热菜: ['宫保鸡丁', '麻婆豆腐', '鱼香肉丝', '回锅肉', '糖醋里脊', '干煸四季豆', '蒜蓉西兰花', '黑椒牛柳'],
+  凉菜: ['凉拌黄瓜', '口水鸡', '夫妻肺片', '凉拌木耳', '皮蛋豆腐', '蒜泥白肉'],
+  汤品: ['番茄蛋汤', '酸辣汤', '紫菜蛋花汤', '玉米排骨汤', '菌菇汤', '老鸭汤'],
+  主食: ['扬州炒饭', '牛肉面', '小笼包', '葱油拌面', '米饭', '肉夹馍'],
+  饮品: ['酸梅汤', '鲜榨橙汁', '柠檬茶', '豆浆', '可乐', '雪碧'],
+  甜点: ['红糖糍粑', '芒果布丁', '双皮奶', '红豆沙', '冰粉'],
 };
 
-export const mockSalesTrend = generateSalesTrend();
+function generateDishes(): Dish[] {
+  const dishes: Dish[] = [];
+  let dishId = 1;
 
-export const mockWastageCategories: WastageCategory[] = [
-  { category: 'expired', label: '过期浪费', amount: 12800, percentage: 35, color: '#dc2626' },
-  { category: 'operation', label: '操作损耗', amount: 9850, percentage: 27, color: '#e8823b' },
-  { category: 'over_prep', label: '备料过多', amount: 8420, percentage: 23, color: '#f59e0b' },
-  { category: 'quality', label: '品质问题', amount: 3650, percentage: 10, color: '#0ea5e9' },
-  { category: 'other', label: '其他原因', amount: 1830, percentage: 5, color: '#9fb3c8' },
-];
+  stores.forEach((store, storeIdx) => {
+    const storeFactor = 0.85 + (storeIdx % 5) * 0.08;
 
-export const mockAlerts: Alert[] = [
+    dishCategories.forEach((category) => {
+      const names = dishNames[category];
+      names.forEach((name) => {
+        const basePrice = 15 + Math.floor(Math.random() * 85);
+        const price = Math.round(basePrice * (0.95 + Math.random() * 0.1) * 100) / 100;
+        const cost = Math.round(price * (0.25 + Math.random() * 0.35) * 100) / 100;
+        const grossMargin = Math.round(((price - cost) / price) * 10000) / 100;
+        const salesCount = Math.round((50 + Math.random() * 300) * storeFactor);
+        const salesAmount = Math.round(price * salesCount * 100) / 100;
+
+        dishes.push({
+          id: `DISH${String(dishId++).padStart(4, '0')}`,
+          name,
+          category,
+          price,
+          cost,
+          grossMargin,
+          salesCount,
+          salesAmount,
+          storeId: store.id,
+        });
+      });
+    });
+  });
+
+  return dishes;
+}
+
+export const dishes: Dish[] = generateDishes();
+
+const alertConfigs: Array<{
+  type: Alert['type'];
+  threshold: number;
+  minMetricDelta: number;
+  suggestions: string[];
+}> = [
   {
-    id: 'a001',
-    storeId: 'GZ001',
-    storeName: '广州天河城店',
     type: 'wastage',
-    level: 'level2',
-    status: 'confirmed',
-    metricValue: 6.5,
     threshold: 5,
-    consecutiveDays: 8,
-    createdAt: '2026-06-01T09:00:00Z',
-    suggestion: '建议优化食材采购计划，加强备料管理，培训后厨减少操作损耗',
-    daysRemaining: 0,
-    approvalFlow: {
-      storeManagerConfirm: {
-        userId: 'st002',
-        userName: '陈店长',
-        status: 'approved',
-        comment: '已确认问题，正在制定整改方案',
-        timestamp: '2026-06-02T10:30:00Z',
-      },
-      regionManagerReview: {
-        userId: 'rg002',
-        userName: '刘经理',
-        status: 'approved',
-        comment: '同意，建议派区域督导协助整改',
-        timestamp: '2026-06-03T14:20:00Z',
-      },
-      hqDirectorApprove: {
-        userId: 'hq001',
-        userName: '张运营',
-        status: 'pending',
-      },
-    },
+    minMetricDelta: 1.5,
+    suggestions: [
+      '建议加强食材验收标准，减少不合格原材料入库',
+      '优化备料计划，根据历史销量精准预估当日用量',
+      '加强员工操作培训，规范切配和烹饪流程',
+      '建立临期食材优先使用机制，减少过期浪费',
+    ],
   },
   {
-    id: 'a002',
-    storeId: 'SH002',
-    storeName: '上海人民广场店',
-    type: 'wastage',
-    level: 'level1',
-    status: 'pending',
-    metricValue: 5.8,
-    threshold: 5,
-    consecutiveDays: 3,
-    createdAt: '2026-06-05T09:00:00Z',
-    suggestion: '建议检查库存管理流程，减少过期食材，优化备料量',
-    daysRemaining: 2,
-  },
-  {
-    id: 'a003',
-    storeId: 'GZ001',
-    storeName: '广州天河城店',
     type: 'turnover',
-    level: 'level1',
-    status: 'pending',
-    metricValue: 2.1,
-    threshold: 2.73,
-    consecutiveDays: 4,
-    createdAt: '2026-06-04T09:00:00Z',
-    suggestion: '建议分析客流变化，推出午市/晚市促销活动，优化菜单结构',
-    daysRemaining: 1,
-  },
-  {
-    id: 'a004',
-    storeId: 'CD001',
-    storeName: '成都春熙路店',
-    type: 'wastage',
-    level: 'level1',
-    status: 'resolved',
-    metricValue: 5.1,
-    threshold: 5,
-    consecutiveDays: 3,
-    createdAt: '2026-05-28T09:00:00Z',
-    suggestion: '建议优化备料流程',
+    threshold: 2.2,
+    minMetricDelta: 0.4,
+    suggestions: [
+      '优化点餐流程，推荐扫码点餐缩短点单时间',
+      '加强出餐效率管理，设定菜品出餐时效标准',
+      '培训服务员快速翻台意识，客人离开后3分钟内完成清台',
+      '分析客流高峰时段，合理安排前厅人力配置',
+    ],
   },
 ];
 
-export const mockForecastItems: ForecastItem[] = [
-  {
-    ingredientId: 'i001',
-    ingredientName: '猪五花肉',
-    unit: 'kg',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 8 + 2),
-    totalDemand: 386,
-    suggestedOrder: 420,
-    currentStock: 58,
-  },
-  {
-    ingredientId: 'i002',
-    ingredientName: '新鲜鲈鱼',
-    unit: 'kg',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 5 + 1),
-    totalDemand: 215,
-    suggestedOrder: 240,
-    currentStock: 32,
-  },
-  {
-    ingredientId: 'i003',
-    ingredientName: '河虾仁',
-    unit: 'kg',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 4 + 1.5),
-    totalDemand: 198,
-    suggestedOrder: 220,
-    currentStock: 45,
-  },
-  {
-    ingredientId: 'i004',
-    ingredientName: '西兰花',
-    unit: 'kg',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 10 + 3),
-    totalDemand: 468,
-    suggestedOrder: 520,
-    currentStock: 86,
-  },
-  {
-    ingredientId: 'i005',
-    ingredientName: '嫩豆腐',
-    unit: '盒',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 12 + 5),
-    totalDemand: 612,
-    suggestedOrder: 680,
-    currentStock: 124,
-  },
-  {
-    ingredientId: 'i006',
-    ingredientName: '土鸡蛋',
-    unit: '个',
-    hourlyDemand: Array.from({ length: 72 }, () => Math.random() * 20 + 8),
-    totalDemand: 1050,
-    suggestedOrder: 1200,
-    currentStock: 320,
-  },
-];
+function generateAlerts(): Alert[] {
+  const alerts: Alert[] = [];
+  let alertId = 1;
+  const now = new Date();
 
-export const mockSupplierQuotes: SupplierQuote[] = [
-  { supplierId: 's001', supplierName: '绿源生鲜', ingredientId: 'i001', ingredientName: '猪五花肉', price: 38.5, minOrder: 50, deliveryTime: '次日6:00前', isRecommended: true, savedCost: 1155 },
-  { supplierId: 's002', supplierName: '肉联直供', ingredientId: 'i001', ingredientName: '猪五花肉', price: 41.2, minOrder: 100, deliveryTime: '当日22:00前' },
-  { supplierId: 's003', supplierName: '优选肉品', ingredientId: 'i001', ingredientName: '猪五花肉', price: 39.8, minOrder: 30, deliveryTime: '次日8:00前' },
-  { supplierId: 's001', supplierName: '绿源生鲜', ingredientId: 'i002', ingredientName: '新鲜鲈鱼', price: 58.0, minOrder: 30, deliveryTime: '次日6:00前' },
-  { supplierId: 's004', supplierName: '海味鲜', ingredientId: 'i002', ingredientName: '新鲜鲈鱼', price: 52.5, minOrder: 40, deliveryTime: '次日7:00前', isRecommended: true, savedCost: 2640 },
-  { supplierId: 's005', supplierName: '菜篮子', ingredientId: 'i004', ingredientName: '西兰花', price: 6.8, minOrder: 100, deliveryTime: '次日5:00前', isRecommended: true, savedCost: 832 },
-  { supplierId: 's001', supplierName: '绿源生鲜', ingredientId: 'i004', ingredientName: '西兰花', price: 7.5, minOrder: 80, deliveryTime: '次日6:00前' },
-];
+  const statuses: Alert['status'][] = ['pending', 'confirmed', 'reviewed', 'approved', 'resolved'];
+  const statusWeights = [25, 20, 20, 15, 20];
 
-export const mockHealthReport: HealthReport = {
-  weekStart: '2026-06-01',
-  weekEnd: '2026-06-07',
-  healthScore: 82,
-  healthLevel: 'good',
-  metricsComparison: [
-    { metric: 'revenue', label: '总营收', unit: '万元', currentWeek: 1285.6, lastWeek: 1186.8, samePeriodLastYear: 1142.3 },
-    { metric: 'turnover', label: '翻台率', unit: '次', currentWeek: 3.12, lastWeek: 2.99, samePeriodLastYear: 2.92 },
-    { metric: 'margin', label: '毛利率', unit: '%', currentWeek: 62.4, lastWeek: 61.5, samePeriodLastYear: 61.1 },
-    { metric: 'wastage', label: '损耗率', unit: '%', currentWeek: 4.3, lastWeek: 4.7, samePeriodLastYear: 4.8 },
-    { metric: 'output', label: '人均产出', unit: '元', currentWeek: 8640, lastWeek: 8182, samePeriodLastYear: 7912 },
-  ],
-  wastageReasonDistribution: [
-    { reason: '过期浪费', percentage: 35, amount: 44800 },
-    { reason: '操作损耗', percentage: 27, amount: 34560 },
-    { reason: '备料过多', percentage: 23, amount: 29440 },
-    { reason: '品质问题', percentage: 10, amount: 12800 },
-    { reason: '其他原因', percentage: 5, amount: 6400 },
-  ],
-  staffRanking: [
-    { staffId: 'e001', staffName: '刘大厨', storeName: '北京国贸店', output: 15680, rank: 1, trend: 'up' },
-    { staffId: 'e002', staffName: '陈师傅', storeName: '杭州西湖店', output: 14520, rank: 2, trend: 'stable' },
-    { staffId: 'e003', staffName: '王大厨', storeName: '北京三里屯店', output: 13890, rank: 3, trend: 'up' },
-    { staffId: 'e004', staffName: '张师傅', storeName: '上海陆家嘴店', output: 12650, rank: 4, trend: 'down' },
-    { staffId: 'e005', staffName: '李厨', storeName: '深圳万象城店', output: 11820, rank: 5, trend: 'up' },
-    { staffId: 'e006', staffName: '赵师傅', storeName: '成都春熙路店', output: 10560, rank: 6, trend: 'stable' },
-    { staffId: 'e007', staffName: '孙大厨', storeName: '上海人民广场店', output: 9840, rank: 7, trend: 'down' },
-    { staffId: 'e008', staffName: '周师傅', storeName: '广州天河城店', output: 8920, rank: 8, trend: 'down' },
-  ],
-  suggestions: [
-    '建议在广州天河城店推出午市商务套餐，提升翻台率2.1→2.8',
-    '将低毛利菜品"时蔬沙拉"进行配方优化或调整定价，毛利率可从50%提升至60%',
-    '加强上海、广州区域门店库存管理，预计可降低损耗率0.8-1.2个百分点',
-    '周五至周日增加高峰期兼职人员配置，优化排班效率可降低人工成本约5%',
-    '将"麻婆豆腐"、"扬州炒饭"等高毛利菜品设为推荐菜，预计可提升整体毛利率1.5%',
-  ],
-};
+  const storeUsers = users.filter((u) => u.role === 'store');
+  const regionUsers = users.filter((u) => u.role === 'region');
+  const hqUsers = users.filter((u) => u.role === 'headquarters');
 
-export const generateTimeSlotData = (): TimeSlotData[] => {
-  const slots = [];
-  for (let h = 10; h <= 22; h++) {
-    slots.push({
-      hour: `${h}:00`,
-      turnover: h >= 11 && h <= 14 ? 0.6 + Math.random() * 0.3 : h >= 17 && h <= 20 ? 0.55 + Math.random() * 0.35 : 0.1 + Math.random() * 0.2,
-      orders: h >= 11 && h <= 14 ? 80 + Math.floor(Math.random() * 40) : h >= 17 && h <= 20 ? 70 + Math.floor(Math.random() * 50) : 10 + Math.floor(Math.random() * 25),
-      revenue: h >= 11 && h <= 14 ? 28000 + Math.floor(Math.random() * 12000) : h >= 17 && h <= 20 ? 32000 + Math.floor(Math.random() * 15000) : 3000 + Math.floor(Math.random() * 8000),
+  for (let i = 0; i < 80; i++) {
+    const storeIdx = Math.floor(Math.random() * stores.length);
+    const config = alertConfigs[Math.floor(Math.random() * alertConfigs.length)];
+    const level: Alert['level'] = Math.random() < 0.35 ? 'level2' : 'level1';
+
+    const rand = Math.random() * 100;
+    let cumWeight = 0;
+    let status: Alert['status'] = 'pending';
+    for (let s = 0; s < statuses.length; s++) {
+      cumWeight += statusWeights[s];
+      if (rand < cumWeight) {
+        status = statuses[s];
+        break;
+      }
+    }
+
+    const daysAgo = Math.floor(Math.random() * 30);
+    const createdAt = new Date(now);
+    createdAt.setDate(createdAt.getDate() - daysAgo);
+    createdAt.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60));
+
+    const consecutiveDays = level === 'level2' ? 5 + Math.floor(Math.random() * 10) : 1 + Math.floor(Math.random() * 4);
+    const metricValue = config.threshold + config.minMetricDelta + Math.random() * (config.type === 'wastage' ? 4 : 1.5);
+
+    const alert: Alert = {
+      id: `ALERT${String(alertId++).padStart(4, '0')}`,
+      type: config.type,
+      level,
+      status,
+      metricValue: Math.round(metricValue * 10) / 10,
+      threshold: config.threshold,
+      consecutiveDays,
+      storeId: stores[storeIdx].id,
+      createdAt: createdAt.toISOString(),
+      suggestion: config.suggestions[Math.floor(Math.random() * config.suggestions.length)],
+      approvalFlow: {},
+    };
+
+    const statusIdx = statuses.indexOf(status);
+    if (statusIdx >= 1 && storeUsers.length > 0) {
+      const u = storeUsers[Math.floor(Math.random() * storeUsers.length)];
+      alert.approvalFlow!.storeManagerConfirm = {
+        userId: u.id,
+        userName: u.name,
+        status: 'approved',
+        timestamp: new Date(createdAt.getTime() + 1000 * 60 * 30).toISOString(),
+      };
+    }
+    if (statusIdx >= 2 && regionUsers.length > 0) {
+      const u = regionUsers[Math.floor(Math.random() * regionUsers.length)];
+      alert.approvalFlow!.regionManagerReview = {
+        userId: u.id,
+        userName: u.name,
+        status: 'approved',
+        timestamp: new Date(createdAt.getTime() + 1000 * 60 * 60 * 3).toISOString(),
+      };
+    }
+    if (statusIdx >= 3 && hqUsers.length > 0) {
+      const u = hqUsers[Math.floor(Math.random() * hqUsers.length)];
+      alert.approvalFlow!.hqDirectorApprove = {
+        userId: u.id,
+        userName: u.name,
+        status: 'approved',
+        timestamp: new Date(createdAt.getTime() + 1000 * 60 * 60 * 8).toISOString(),
+      };
+    }
+
+    alerts.push(alert);
+  }
+
+  return alerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export let alerts: Alert[] = generateAlerts();
+
+function generateTimeSlotData(): TimeSlotData[] {
+  const result: TimeSlotData[] = [];
+  const today = new Date().toISOString().split('T')[0];
+
+  stores.forEach((store, storeIdx) => {
+    const slots: TimeSlotData['slots'] = [];
+    const baseFactor = 0.8 + (storeIdx % 4) * 0.1;
+
+    for (let hour = 6; hour <= 23; hour++) {
+      let factor = 0;
+      if (hour >= 6 && hour < 9) factor = 0.3;
+      else if (hour >= 10 && hour < 14) factor = hour === 12 ? 1.2 : 0.8;
+      else if (hour >= 14 && hour < 17) factor = 0.25;
+      else if (hour >= 17 && hour < 21) factor = hour === 19 ? 1.3 : 0.9;
+      else if (hour >= 21 && hour <= 23) factor = 0.35;
+
+      factor *= baseFactor * (0.9 + Math.random() * 0.2);
+
+      const revenue = Math.round(baseRevenues[storeIdx] / 15 * factor);
+      const orders = Math.round(revenue / (45 + Math.random() * 10));
+
+      slots.push({
+        time: `${String(hour).padStart(2, '0')}:00`,
+        revenue,
+        orders,
+        customers: Math.round(orders * (1.8 + Math.random() * 0.4)),
+      });
+    }
+
+    result.push({ storeId: store.id, date: today, slots });
+  });
+
+  return result;
+}
+
+export const timeSlotData: TimeSlotData[] = generateTimeSlotData();
+
+function generateWasteCategory(): WasteCategory[] {
+  const result: WasteCategory[] = [];
+  const categories = ['过期浪费', '操作损耗', '备料过多', '品质问题', '其他原因'];
+  const today = new Date().toISOString().split('T')[0];
+
+  stores.forEach((store, storeIdx) => {
+    const baseAmount = 800 + storeIdx * 100;
+    const percentages = [0.28, 0.32, 0.18, 0.14, 0.08];
+    const randomPercents = percentages.map(p => p * (0.8 + Math.random() * 0.4));
+    const sum = randomPercents.reduce((a, b) => a + b, 0);
+
+    const cats: WasteCategory['categories'] = categories.map((name, i) => ({
+      name,
+      amount: Math.round(baseAmount * randomPercents[i] / sum),
+      percentage: Math.round((randomPercents[i] / sum) * 10000) / 100,
+    }));
+
+    result.push({
+      storeId: store.id,
+      date: today,
+      categories: cats,
+    });
+  });
+
+  return result;
+}
+
+export const wasteCategories: WasteCategory[] = generateWasteCategory();
+
+function generatePromotions(): Promotion[] {
+  const promotions: Promotion[] = [];
+  const promoNames = ['新品尝鲜8折', '周末满减活动', '会员日特惠', '午市套餐优惠', '晚市双人套餐', '节日特惠活动'];
+  const types: Promotion['type'][] = ['discount', 'coupon', 'bundle', 'special'];
+  let promoId = 1;
+  const now = new Date();
+
+  stores.forEach((store, storeIdx) => {
+    const count = 2 + (storeIdx % 3);
+    for (let i = 0; i < count; i++) {
+      const startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - Math.floor(Math.random() * 20));
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 7 + Math.floor(Math.random() * 14));
+
+      promotions.push({
+        id: `PROMO${String(promoId++).padStart(4, '0')}`,
+        storeId: store.id,
+        name: promoNames[Math.floor(Math.random() * promoNames.length)],
+        type: types[Math.floor(Math.random() * types.length)],
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        discount: Math.round((0.65 + Math.random() * 0.3) * 100) / 100,
+        status: endDate < now ? 'ended' : startDate > now ? 'draft' : 'active',
+        uploadedBy: users[Math.floor(Math.random() * users.length)].id,
+        uploadedAt: new Date(startDate.getTime() - 1000 * 60 * 60 * 48).toISOString(),
+      });
+    }
+  });
+
+  return promotions;
+}
+
+export let promotions: Promotion[] = generatePromotions();
+
+function generateSupplierQuotes(): SupplierQuote[] {
+  const quotes: SupplierQuote[] = [];
+  const suppliers = ['绿源蔬菜配送', '优质肉业', '海鲜直供', '粮油批发', '调味品专营', '饮品供应商'];
+  const items = [
+    { name: '新鲜大白菜', unit: 'kg' },
+    { name: '猪五花肉', unit: 'kg' },
+    { name: '牛里脊', unit: 'kg' },
+    { name: '三文鱼', unit: 'kg' },
+    { name: '大米', unit: '袋(25kg)' },
+    { name: '食用油', unit: '桶(5L)' },
+    { name: '生抽酱油', unit: '瓶(1L)' },
+    { name: '鸡蛋', unit: '箱(30枚)' },
+  ];
+  let quoteId = 1;
+  const now = new Date();
+
+  for (let i = 0; i < 40; i++) {
+    const item = items[Math.floor(Math.random() * items.length)];
+    const basePrices: Record<string, number> = {
+      '新鲜大白菜': 3.5,
+      '猪五花肉': 38,
+      '牛里脊': 85,
+      '三文鱼': 120,
+      '大米': 120,
+      '食用油': 75,
+      '生抽酱油': 22,
+      '鸡蛋': 28,
+    };
+    const validFrom = new Date(now);
+    validFrom.setDate(validFrom.getDate() - Math.floor(Math.random() * 15));
+    const validTo = new Date(validFrom);
+    validTo.setDate(validTo.getDate() + 30);
+
+    quotes.push({
+      id: `QUOTE${String(quoteId++).padStart(4, '0')}`,
+      supplierName: suppliers[Math.floor(Math.random() * suppliers.length)],
+      itemName: item.name,
+      unit: item.unit,
+      price: Math.round(basePrices[item.name] * (0.9 + Math.random() * 0.2) * 100) / 100,
+      quantity: 50 + Math.floor(Math.random() * 200),
+      validFrom: validFrom.toISOString().split('T')[0],
+      validTo: validTo.toISOString().split('T')[0],
+      uploadedBy: users[Math.floor(Math.random() * 6)].id,
+      uploadedAt: new Date(validFrom.getTime() - 1000 * 60 * 60 * 24).toISOString(),
     });
   }
-  return slots;
-};
+
+  return quotes;
+}
+
+export let supplierQuotes: SupplierQuote[] = generateSupplierQuotes();
+
+function generateDemandForecasts(): DemandForecast[] {
+  const result: DemandForecast[] = [];
+  const forecastItems = [
+    { name: '新鲜大白菜', category: '蔬菜类', unit: 'kg' },
+    { name: '猪五花肉', category: '肉类', unit: 'kg' },
+    { name: '牛里脊', category: '肉类', unit: 'kg' },
+    { name: '三文鱼', category: '海鲜类', unit: 'kg' },
+    { name: '大米', category: '主食类', unit: '袋(25kg)' },
+    { name: '鸡蛋', category: '蛋类', unit: '箱(30枚)' },
+    { name: '番茄', category: '蔬菜类', unit: 'kg' },
+    { name: '土豆', category: '蔬菜类', unit: 'kg' },
+    { name: '豆腐', category: '豆制品', unit: '盒' },
+    { name: '食用油', category: '调料类', unit: '桶(5L)' },
+  ];
+
+  const today = new Date();
+
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() + dayOffset);
+    const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    stores.forEach((store, storeIdx) => {
+      const storeFactor = 0.85 + (storeIdx % 5) * 0.08;
+      const weekendFactor = isWeekend ? 1.3 : 1;
+
+      const items = forecastItems.map((item) => {
+        const baseQuantities: Record<string, number> = {
+          '新鲜大白菜': 25,
+          '猪五花肉': 18,
+          '牛里脊': 12,
+          '三文鱼': 8,
+          '大米': 4,
+          '鸡蛋': 6,
+          '番茄': 20,
+          '土豆': 22,
+          '豆腐': 30,
+          '食用油': 2,
+        };
+        const baseQty = baseQuantities[item.name] || 15;
+        const forecastQuantity = Math.round(baseQty * storeFactor * weekendFactor * (0.9 + Math.random() * 0.2));
+
+        return {
+          name: item.name,
+          category: item.category,
+          forecastQuantity,
+          actualQuantity: dayOffset === 0 ? Math.round(forecastQuantity * (0.9 + Math.random() * 0.2)) : undefined,
+          unit: item.unit,
+          confidence: Math.round((0.82 + Math.random() * 0.15) * 10000) / 100,
+        };
+      });
+
+      result.push({ date: dateStr, storeId: store.id, items });
+    });
+  }
+
+  return result;
+}
+
+export const demandForecasts: DemandForecast[] = generateDemandForecasts();
+
+function generateWeeklyReports(): WeeklyReport[] {
+  const reports: WeeklyReport[] = [];
+  const now = new Date();
+  let reportId = 1;
+
+  for (let weekOffset = 0; weekOffset < 4; weekOffset++) {
+    const endDate = new Date(now);
+    endDate.setDate(endDate.getDate() - weekOffset * 7 - (endDate.getDay() + 1) % 7);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 6);
+    const week = `${startDate.getFullYear()}年第${Math.floor((endDate.getTime() - new Date(startDate.getFullYear(), 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1}周`;
+
+    reports.push({
+      id: `REPORT${String(reportId++).padStart(4, '0')}`,
+      week,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      overallScore: Math.round((78 + Math.random() * 18) * 10) / 10,
+      revenueScore: Math.round((75 + Math.random() * 20) * 10) / 10,
+      costScore: Math.round((76 + Math.random() * 19) * 10) / 10,
+      qualityScore: Math.round((80 + Math.random() * 17) * 10) / 10,
+      serviceScore: Math.round((82 + Math.random() * 15) * 10) / 10,
+      highlights: [
+        '本周营业额同比增长8.5%',
+        '客户满意度评分达到4.6分',
+        '招牌菜销量创新高',
+      ],
+      issues: [
+        '个别门店食材成本率略高于目标',
+        '周末高峰时段出餐速度有待提升',
+      ],
+      recommendations: [
+        '建议优化食材采购计划，降低成本率',
+        '增加周末高峰期临时人手配置',
+        '加强新员工培训，提升服务质量',
+      ],
+    });
+
+    stores.forEach((store, storeIdx) => {
+      const storeFactor = 0.9 + (storeIdx % 5) * 0.04;
+      reports.push({
+        id: `REPORT${String(reportId++).padStart(4, '0')}`,
+        week,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        storeId: store.id,
+        overallScore: Math.round((75 + Math.random() * 20) * storeFactor * 10) / 10,
+        revenueScore: Math.round((72 + Math.random() * 22) * storeFactor * 10) / 10,
+        costScore: Math.round((74 + Math.random() * 20) * storeFactor * 10) / 10,
+        qualityScore: Math.round((78 + Math.random() * 18) * storeFactor * 10) / 10,
+        serviceScore: Math.round((80 + Math.random() * 16) * storeFactor * 10) / 10,
+        highlights: [
+          `${store.city}店本周营业额达成率105%`,
+          '客户投诉量较上周下降30%',
+        ],
+        issues: [
+          '食材损耗率略有上升',
+          '部分时段服务人员不足',
+        ],
+        recommendations: [
+          '加强库存管理，减少食材损耗',
+          '优化排班制度，合理配置人力',
+        ],
+      });
+    });
+  }
+
+  return reports;
+}
+
+export const weeklyReports: WeeklyReport[] = generateWeeklyReports();
+
+function generateHeatmapData(): HeatmapData[] {
+  const result: HeatmapData[] = [];
+  const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+  stores.forEach((store, storeIdx) => {
+    const storeFactor = 0.85 + (storeIdx % 5) * 0.07;
+
+    days.forEach((day) => {
+      const isWeekend = day === '周六' || day === '周日';
+      const data: HeatmapData['data'] = [];
+
+      for (let hour = 6; hour <= 23; hour++) {
+        let factor = 0;
+        if (hour >= 6 && hour < 9) factor = 0.2;
+        else if (hour >= 10 && hour < 14) factor = hour === 12 ? 0.9 : 0.5;
+        else if (hour >= 14 && hour < 17) factor = 0.15;
+        else if (hour >= 17 && hour < 21) factor = hour === 19 ? (isWeekend ? 1.0 : 0.85) : 0.6;
+        else if (hour >= 21 && hour <= 23) factor = 0.2;
+
+        factor *= storeFactor * (isWeekend ? 1.3 : 1);
+        const value = Math.round(factor * 100);
+
+        data.push({ hour, value });
+      }
+
+      result.push({ storeId: store.id, day, data });
+    });
+  });
+
+  return result;
+}
+
+export const heatmapData: HeatmapData[] = generateHeatmapData();
+
+export function filterStoresByRole(userRole: UserRole, userRegion?: Region, userStoreId?: string): Store[] {
+  if (userRole === 'headquarters') return stores;
+  if (userRole === 'region') return stores.filter((s) => s.region === userRegion);
+  return stores.filter((s) => s.id === userStoreId);
+}
+
+export function filterDataByRole<T extends { storeId: string }>(
+  data: T[],
+  userRole: UserRole,
+  userRegion?: Region,
+  userStoreId?: string,
+): T[] {
+  const allowedStores = filterStoresByRole(userRole, userRegion, userStoreId);
+  const allowedIds = new Set(allowedStores.map((s) => s.id));
+  return data.filter((d) => allowedIds.has(d.storeId));
+}

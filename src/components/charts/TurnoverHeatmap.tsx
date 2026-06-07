@@ -1,163 +1,205 @@
 import { useState } from 'react';
-import type { RegionHeatmapData } from '../../types';
-import { cn } from '../../lib/utils';
-import { formatNumber, formatCurrency } from '../../utils/format';
+import type { RegionHeatmapData } from '@/types';
 
 interface TurnoverHeatmapProps {
   data: RegionHeatmapData[];
 }
 
-const CHINA_REGIONS: { name: string; x: number; y: number; w: number; h: number }[] = [
-  { name: '黑龙江', x: 80, y: 5, w: 40, h: 30 },
-  { name: '吉林', x: 82, y: 35, w: 36, h: 20 },
-  { name: '辽宁', x: 75, y: 55, w: 38, h: 18 },
-  { name: '内蒙古', x: 30, y: 20, w: 55, h: 45 },
-  { name: '新疆', x: 5, y: 25, w: 40, h: 55 },
-  { name: '西藏', x: 5, y: 65, w: 35, h: 35 },
-  { name: '青海', x: 35, y: 60, w: 25, h: 25 },
-  { name: '甘肃', x: 50, y: 50, w: 25, h: 35 },
-  { name: '宁夏', x: 55, y: 45, w: 12, h: 18 },
-  { name: '陕西', x: 62, y: 50, w: 18, h: 30 },
-  { name: '山西', x: 72, y: 55, w: 14, h: 25 },
-  { name: '河北', x: 70, y: 40, w: 20, h: 20 },
-  { name: '北京', x: 78, y: 38, w: 10, h: 8 },
-  { name: '天津', x: 85, y: 42, w: 8, h: 6 },
-  { name: '山东', x: 80, y: 62, w: 22, h: 16 },
-  { name: '河南', x: 65, y: 72, w: 22, h: 18 },
-  { name: '江苏', x: 82, y: 75, w: 18, h: 14 },
-  { name: '上海', x: 95, y: 78, w: 6, h: 5 },
-  { name: '安徽', x: 75, y: 80, w: 18, h: 18 },
-  { name: '浙江', x: 92, y: 82, w: 14, h: 14 },
-  { name: '湖北', x: 60, y: 82, w: 22, h: 16 },
-  { name: '湖南', x: 60, y: 95, w: 20, h: 18 },
-  { name: '江西', x: 78, y: 92, w: 16, h: 20 },
-  { name: '福建', x: 92, y: 95, w: 14, h: 18 },
-  { name: '台湾', x: 100, y: 100, w: 6, h: 12 },
-  { name: '广东', x: 72, y: 108, w: 24, h: 14 },
-  { name: '广西', x: 55, y: 108, w: 22, h: 18 },
-  { name: '海南', x: 68, y: 125, w: 14, h: 10 },
-  { name: '四川', x: 38, y: 75, w: 28, h: 32 },
-  { name: '重庆', x: 56, y: 85, w: 12, h: 12 },
-  { name: '贵州', x: 50, y: 98, w: 18, h: 16 },
-  { name: '云南', x: 30, y: 95, w: 24, h: 28 },
+interface ProvinceShape {
+  id: string;
+  name: string;
+  path: string;
+  labelX: number;
+  labelY: number;
+}
+
+const provinceShapes: ProvinceShape[] = [
+  { id: 'beijing', name: '北京', path: 'M420,120 L460,110 L470,140 L450,160 L420,155 Z', labelX: 440, labelY: 138 },
+  { id: 'tianjin', name: '天津', path: 'M470,140 L495,135 L500,160 L480,170 L465,158 Z', labelX: 483, labelY: 153 },
+  { id: 'hebei', name: '河北', path: 'M400,90 L500,80 L520,120 L510,170 L490,190 L430,180 L400,160 L390,120 Z', labelX: 455, labelY: 125 },
+  { id: 'shanxi', name: '山西', path: 'M340,110 L400,90 L390,120 L400,160 L380,200 L340,195 L320,155 Z', labelX: 360, labelY: 150 },
+  { id: 'neimenggu', name: '内蒙古', path: 'M260,40 L520,10 L560,30 L540,70 L500,80 L400,90 L340,110 L280,100 L240,80 Z', labelX: 400, labelY: 55 },
+  { id: 'liaoning', name: '辽宁', path: 'M500,40 L580,30 L600,60 L580,95 L540,95 L520,70 Z', labelX: 555, labelY: 62 },
+  { id: 'jilin', name: '吉林', path: 'M560,5 L640,0 L655,30 L630,55 L580,45 L560,30 Z', labelX: 605, labelY: 25 },
+  { id: 'heilongjiang', name: '黑龙江', path: 'M580,0 L700,0 L720,30 L690,60 L640,45 L600,30 Z', labelX: 650, labelY: 25 },
+  { id: 'shanghai', name: '上海', path: 'M535,295 L560,290 L565,310 L545,320 L530,308 Z', labelX: 548, labelY: 305 },
+  { id: 'jiangsu', name: '江苏', path: 'M470,260 L560,255 L570,290 L535,295 L530,308 L500,315 L470,300 Z', labelX: 520, labelY: 285 },
+  { id: 'zhejiang', name: '浙江', path: 'M500,315 L565,310 L575,350 L545,375 L510,370 L495,345 Z', labelX: 535, labelY: 342 },
+  { id: 'anhui', name: '安徽', path: 'M430,280 L500,275 L500,315 L495,345 L465,355 L430,340 L420,305 Z', labelX: 463, labelY: 315 },
+  { id: 'fujian', name: '福建', path: 'M495,370 L545,375 L555,415 L525,440 L490,430 L480,400 Z', labelX: 518, labelY: 403 },
+  { id: 'jiangxi', name: '江西', path: 'M430,355 L495,345 L480,400 L490,430 L455,450 L420,430 L410,390 Z', labelX: 453, labelY: 395 },
+  { id: 'shandong', name: '山东', path: 'M400,210 L520,190 L540,230 L510,260 L470,260 L420,250 L395,230 Z', labelX: 465, labelY: 230 },
+  { id: 'henan', name: '河南', path: 'M340,240 L420,230 L420,250 L430,280 L400,300 L340,295 L310,270 Z', labelX: 375, labelY: 268 },
+  { id: 'hubei', name: '湖北', path: 'M330,300 L430,295 L430,340 L400,355 L340,350 L310,325 Z', labelX: 373, labelY: 325 },
+  { id: 'hunan', name: '湖南', path: 'M340,360 L420,355 L420,390 L410,430 L370,450 L330,435 L315,400 Z', labelX: 370, labelY: 400 },
+  { id: 'guangdong', name: '广东', path: 'M370,455 L490,450 L510,490 L475,520 L400,520 L360,495 Z', labelX: 435, labelY: 487 },
+  { id: 'guangxi', name: '广西', path: 'M270,450 L370,455 L360,495 L330,520 L270,510 L245,480 Z', labelX: 310, labelY: 485 },
+  { id: 'hainan', name: '海南', path: 'M320,545 L375,540 L385,570 L355,585 L320,575 Z', labelX: 350, labelY: 562 },
+  { id: 'chongqing', name: '重庆', path: 'M250,350 L310,340 L320,370 L295,390 L255,385 L240,365 Z', labelX: 280, labelY: 365 },
+  { id: 'sichuan', name: '四川', path: 'M160,320 L250,310 L250,350 L240,365 L255,385 L230,420 L180,425 L140,395 L130,355 Z', labelX: 200, labelY: 368 },
+  { id: 'guizhou', name: '贵州', path: 'M240,430 L330,420 L330,450 L310,475 L260,480 L230,460 Z', labelX: 280, labelY: 453 },
+  { id: 'yunnan', name: '云南', path: 'M130,440 L230,430 L230,460 L260,480 L240,515 L180,520 L120,495 L105,465 Z', labelX: 180, labelY: 475 },
+  { id: 'xizang', name: '西藏', path: 'M20,340 L140,320 L130,355 L140,395 L105,420 L40,410 L10,375 Z', labelX: 75, labelY: 370 },
+  { id: 'shaanxi', name: '陕西', path: 'M290,210 L340,200 L340,240 L310,270 L340,295 L330,325 L290,320 L270,280 L275,240 Z', labelX: 308, labelY: 265 },
+  { id: 'gansu', name: '甘肃', path: 'M180,180 L290,160 L290,210 L275,240 L270,280 L230,285 L200,260 L165,230 L160,200 Z', labelX: 230, labelY: 225 },
+  { id: 'qinghai', name: '青海', path: 'M80,230 L180,210 L200,260 L180,300 L110,310 L70,285 L60,255 Z', labelX: 135, labelY: 265 },
+  { id: 'ningxia', name: '宁夏', path: 'M260,180 L295,175 L300,205 L280,220 L258,210 Z', labelX: 280, labelY: 198 },
+  { id: 'xinjiang', name: '新疆', path: 'M10,100 L200,60 L230,110 L210,160 L180,180 L80,190 L30,170 L5,135 Z', labelX: 115, labelY: 130 },
+  { id: 'taiwan', name: '台湾', path: 'M575,410 L595,405 L605,440 L585,455 L570,435 Z', labelX: 588, labelY: 430 },
 ];
 
+function getTurnoverColor(rate: number): string {
+  if (rate < 2.5) return '#ef4444';
+  if (rate < 3.0) return '#f97316';
+  if (rate < 3.5) return '#10b981';
+  return '#065f46';
+}
+
+function getTurnoverColorOpacity(rate: number): string {
+  const baseColor = getTurnoverColor(rate);
+  const normalizedRate = Math.min(Math.max((rate - 1.5) / 3, 0.3), 1);
+  const opacity = Math.round(normalizedRate * 255).toString(16).padStart(2, '0');
+  return baseColor + opacity;
+}
+
 export default function TurnoverHeatmap({ data }: TurnoverHeatmapProps) {
-  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
+  const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  const getRegionData = (provinceName: string) => {
-    return data.find((d) => d.province === provinceName || d.city === provinceName);
+  const dataMap = new Map(data.map((d) => [d.city, d]));
+
+  const handleMouseMove = (e: React.MouseEvent, provinceName: string) => {
+    setHoveredProvince(provinceName);
+    const rect = (e.currentTarget as SVGElement).closest('svg')?.getBoundingClientRect();
+    if (rect) {
+      setTooltipPosition({
+        x: e.clientX - rect.left + 15,
+        y: e.clientY - rect.top + 15,
+      });
+    }
   };
 
-  const getColor = (rate?: number) => {
-    if (!rate) return '#e5e7eb';
-    if (rate >= 3.5) return '#16a34a';
-    if (rate >= 3.0) return '#22c55e';
-    if (rate >= 2.7) return '#86efac';
-    if (rate >= 2.5) return '#bbf7d0';
-    if (rate >= 2.3) return '#fde68a';
-    if (rate >= 2.0) return '#fbbf24';
-    return '#f87171';
+  const handleMouseLeave = () => {
+    setHoveredProvince(null);
   };
 
-  const hoveredData = hoveredRegion ? getRegionData(hoveredRegion) : null;
+  const hoveredData = hoveredProvince ? dataMap.get(hoveredProvince) : null;
+
+  const legendItems = [
+    { label: '< 2.5', color: '#ef4444' },
+    { label: '2.5 - 3.0', color: '#f97316' },
+    { label: '3.0 - 3.5', color: '#10b981' },
+    { label: '> 3.5', color: '#065f46' },
+  ];
 
   return (
-    <div className="bg-white rounded-xl p-5 card-shadow h-full">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-primary-800 font-serif-cn">区域翻台率热力图</h3>
-          <p className="text-xs text-primary-400 mt-0.5">各省市门店翻台效率分布</p>
+    <div className="bg-white rounded-xl card-shadow p-6 animate-fade-in">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="font-serif-cn text-xl font-semibold text-primary-800">
+          全国区域翻台率热力图
+        </h3>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-primary-500">翻台率（次/天）</span>
+          <div className="flex items-center gap-2">
+            {legendItems.map((item) => (
+              <div key={item.label} className="flex items-center gap-1">
+                <div
+                  className="w-4 h-4 rounded"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="text-xs text-primary-600">{item.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="relative">
-        <svg viewBox="0 0 115 140" className="w-full h-auto" style={{ maxHeight: 320 }}>
-          {CHINA_REGIONS.map((region) => {
-            const regionData = getRegionData(region.name);
-            const isHovered = hoveredRegion === region.name;
+        <svg viewBox="0 0 730 600" className="w-full h-auto">
+          <defs>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15" />
+            </filter>
+          </defs>
+
+          {provinceShapes.map((province) => {
+            const provinceData = dataMap.get(province.name);
+            const turnoverRate = provinceData?.turnoverRate ?? 0;
+            const fillColor = provinceData
+              ? getTurnoverColorOpacity(turnoverRate)
+              : '#e5e7eb';
+            const isHovered = hoveredProvince === province.name;
+
             return (
-              <g key={region.name}>
-                <rect
-                  x={region.x}
-                  y={region.y}
-                  width={region.w}
-                  height={region.h}
-                  rx={2}
-                  fill={getColor(regionData?.turnoverRate)}
-                  stroke={isHovered ? '#1e3a5f' : 'white'}
-                  strokeWidth={isHovered ? 0.8 : 0.3}
+              <g key={province.id}>
+                <path
+                  d={province.path}
+                  fill={fillColor}
+                  stroke={isHovered ? '#f97316' : '#ffffff'}
+                  strokeWidth={isHovered ? 2.5 : 1}
                   className="cursor-pointer transition-all duration-200"
                   style={{
-                    filter: isHovered ? 'brightness(1.1)' : undefined,
+                    filter: isHovered ? 'url(#shadow)' : 'none',
+                    transform: isHovered ? 'scale(1.02)' : 'scale(1)',
+                    transformOrigin: 'center',
                   }}
-                  onMouseEnter={() => setHoveredRegion(region.name)}
-                  onMouseLeave={() => setHoveredRegion(null)}
+                  onMouseMove={(e) => handleMouseMove(e, province.name)}
+                  onMouseLeave={handleMouseLeave}
                 />
-                {region.w >= 12 && region.h >= 10 && (
-                  <text
-                    x={region.x + region.w / 2}
-                    y={region.y + region.h / 2 + 1.5}
-                    textAnchor="middle"
-                    className="pointer-events-none"
-                    fill={regionData ? 'white' : '#9ca3af'}
-                    fontSize={region.w > 18 ? 3.5 : 2.8}
-                    fontWeight={regionData ? 600 : 400}
-                  >
-                    {region.name}
-                  </text>
-                )}
+                <text
+                  x={province.labelX}
+                  y={province.labelY}
+                  textAnchor="middle"
+                  className="pointer-events-none select-none"
+                  fontSize="10"
+                  fill={provinceData ? '#ffffff' : '#6b7280'}
+                  fontWeight={isHovered ? 700 : 500}
+                >
+                  {province.name}
+                </text>
               </g>
             );
           })}
         </svg>
 
         {hoveredData && (
-          <div className="absolute top-2 right-2 bg-white rounded-lg shadow-lg border border-primary-100 p-3 min-w-[160px] animate-fade-in">
-            <div className="font-semibold text-primary-800 text-sm mb-2">
-              {hoveredData.province}
-              {hoveredData.city !== hoveredData.province && ` · ${hoveredData.city}`}
+          <div
+            className="absolute pointer-events-none bg-primary-900 text-white px-4 py-3 rounded-lg shadow-xl z-10 animate-fade-in"
+            style={{
+              left: tooltipPosition.x,
+              top: tooltipPosition.y,
+              minWidth: '180px',
+            }}
+          >
+            <div className="font-serif-cn text-lg font-semibold text-accent-400 mb-2">
+              {hoveredData.city}
+              <span className="text-sm text-primary-300 ml-2">
+                ({hoveredData.province})
+              </span>
             </div>
-            <div className="space-y-1.5 text-xs">
+            <div className="space-y-1.5 text-sm">
               <div className="flex justify-between">
-                <span className="text-primary-400">翻台率</span>
-                <span className="font-semibold text-primary-700">{formatNumber(hoveredData.turnoverRate)} 次</span>
+                <span className="text-primary-300">翻台率</span>
+                <span
+                  className="font-semibold"
+                  style={{ color: getTurnoverColor(hoveredData.turnoverRate) }}
+                >
+                  {hoveredData.turnoverRate.toFixed(2)} 次/天
+                </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-primary-400">门店数</span>
-                <span className="font-semibold text-primary-700">{hoveredData.storeCount} 家</span>
+                <span className="text-primary-300">门店数量</span>
+                <span className="font-semibold">{hoveredData.storeCount} 家</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-primary-400">平均营收</span>
-                <span className="font-semibold text-primary-700">{formatCurrency(hoveredData.avgRevenue)}</span>
+                <span className="text-primary-300">平均营收</span>
+                <span className="font-semibold text-accent-400">
+                  ¥{hoveredData.avgRevenue.toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
         )}
-
-        <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-primary-50">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-3 rounded" style={{ background: '#f87171' }} />
-            <span className="text-[10px] text-primary-400">{'<2.0'}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-3 rounded" style={{ background: '#fbbf24' }} />
-            <span className="text-[10px] text-primary-400">2.0-2.5</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-3 rounded" style={{ background: '#bbf7d0' }} />
-            <span className="text-[10px] text-primary-400">2.5-3.0</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-3 rounded" style={{ background: '#22c55e' }} />
-            <span className="text-[10px] text-primary-400">3.0-3.5</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-3 rounded" style={{ background: '#16a34a' }} />
-            <span className="text-[10px] text-primary-400">{'>3.5'}</span>
-          </div>
-          <span className="text-[10px] text-primary-400 ml-2">翻台率（次/日）</span>
-        </div>
       </div>
     </div>
   );

@@ -1,67 +1,70 @@
 import { create } from 'zustand';
-import type { User, UserRole } from '../types';
-import { api } from '../services/api';
+import { persist } from 'zustand/middleware';
+import type { User, StoreFilters } from '@/types';
 
-interface AppState {
+interface AuthState {
   user: User | null;
   token: string | null;
-  sidebarCollapsed: boolean;
-  selectedCity: string;
-  selectedBrand: string;
-  isLoading: boolean;
-  login: (role: UserRole) => Promise<void>;
+  isAuthenticated: boolean;
+  setUser: (user: User | null) => void;
+  setToken: (token: string | null) => void;
+  login: (user: User, token: string) => void;
   logout: () => void;
-  toggleSidebar: () => void;
-  setSelectedCity: (city: string) => void;
-  setSelectedBrand: (brand: string) => void;
-  setLoading: (loading: boolean) => void;
-  hydrate: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  user: null,
-  token: null,
-  sidebarCollapsed: false,
-  selectedCity: 'all',
-  selectedBrand: 'all',
-  isLoading: false,
+interface UIState {
+  sidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+}
 
-  login: async (role: UserRole) => {
-    set({ isLoading: true });
-    try {
-      const { token, user } = await api.auth.login(role);
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      set({ token, user, isLoading: false });
-    } catch (error) {
-      set({ isLoading: false });
-      throw error;
+interface FilterState {
+  storeFilters: StoreFilters;
+  setStoreFilters: (filters: Partial<StoreFilters>) => void;
+  resetStoreFilters: () => void;
+}
+
+type AppState = AuthState & UIState & FilterState;
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      setUser: (user) => set({ user, isAuthenticated: !!user }),
+      setToken: (token) => set({ token }),
+      login: (user, token) => set({ user, token, isAuthenticated: true }),
+      logout: () => set({ user: null, token: null, isAuthenticated: false }),
+
+      sidebarCollapsed: false,
+      toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+
+      storeFilters: {
+        city: undefined,
+        brand: undefined,
+        regionId: undefined,
+      },
+      setStoreFilters: (filters) =>
+        set((state) => ({ storeFilters: { ...state.storeFilters, ...filters } })),
+      resetStoreFilters: () =>
+        set({
+          storeFilters: {
+            city: undefined,
+            brand: undefined,
+            regionId: undefined,
+          },
+        }),
+    }),
+    {
+      name: 'restaurant-platform-storage',
+      partialize: (state) => ({
+        user: state.user,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
+        sidebarCollapsed: state.sidebarCollapsed,
+      }),
     }
-  },
-
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    set({ user: null, token: null });
-  },
-
-  toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-
-  setSelectedCity: (city: string) => set({ selectedCity: city }),
-  setSelectedBrand: (brand: string) => set({ selectedBrand: brand }),
-  setLoading: (isLoading: boolean) => set({ isLoading }),
-
-  hydrate: () => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr) as User;
-        set({ token, user });
-      } catch {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-      }
-    }
-  },
-}));
+  )
+);

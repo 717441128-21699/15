@@ -1,252 +1,284 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, TrendingDown, Check, Clock, UserCheck, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import type { Alert } from '@/types';
+import { useAppStore } from '@/store';
+import { alertApi } from '@/services/api';
+import { cn } from '@/lib/utils';
 import {
-  AlertTriangle,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  XCircle,
-  User,
-  ChevronRight,
-  Send,
-} from 'lucide-react';
-import type { Alert } from '../../types';
-import { cn } from '../../lib/utils';
-import { getAlertTypeLabel, getAlertLevelLabel, getAlertStatusLabel, formatPercent, formatNumber } from '../../utils/format';
-import { api } from '../../services/api';
-import { useAppStore } from '../../store';
+  formatAlertLevelLabel,
+  formatAlertStatusLabel,
+  formatAlertTypeLabel,
+  formatDate,
+  formatPercent,
+  formatNumber,
+} from '@/utils/format';
 
-interface AlertCardProps {
+export interface AlertCardProps {
   alert: Alert;
-  onAction?: () => void;
+  onAction?: (updatedAlert: Alert) => void;
 }
 
-const levelConfig: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  level1: { bg: 'bg-warning/10', text: 'text-warning', border: 'border-warning/30', label: '一级' },
-  level2: { bg: 'bg-danger/10', text: 'text-danger', border: 'border-danger/30', label: '二级' },
-};
+interface TimelineStep {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  isCompleted: boolean;
+  isCurrent: boolean;
+  completedAt?: string;
+  userName?: string;
+}
 
-const statusBg: Record<string, string> = {
-  pending: 'bg-warning/10 text-warning',
-  confirmed: 'bg-info/10 text-info',
-  reviewed: 'bg-accent-500/10 text-accent-500',
-  approved: 'bg-success/10 text-success',
-  resolved: 'bg-primary-100 text-primary-500',
-  expired: 'bg-primary-100 text-primary-400',
-};
+function getTimelineSteps(alert: Alert): TimelineStep[] {
+  const statusOrder: Alert['status'][] = ['pending', 'confirmed', 'reviewed', 'approved', 'resolved'];
+  const currentIdx = statusOrder.indexOf(alert.status);
 
-export default function AlertCard({ alert, onAction }: AlertCardProps) {
-  const navigate = useNavigate();
+  const steps: TimelineStep[] = [
+    {
+      key: 'confirm',
+      label: '店长确认',
+      icon: UserCheck,
+      isCompleted: currentIdx >= 1,
+      isCurrent: currentIdx === 0,
+      completedAt: alert.approvalFlow?.storeManagerConfirm?.timestamp,
+      userName: alert.approvalFlow?.storeManagerConfirm?.userName,
+    },
+    {
+      key: 'review',
+      label: '区域经理复核',
+      icon: ShieldCheck,
+      isCompleted: currentIdx >= 2,
+      isCurrent: currentIdx === 1,
+      completedAt: alert.approvalFlow?.regionManagerReview?.timestamp,
+      userName: alert.approvalFlow?.regionManagerReview?.userName,
+    },
+    {
+      key: 'approve',
+      label: '总部总监批准',
+      icon: CheckCircle2,
+      isCompleted: currentIdx >= 3 || alert.status === 'resolved',
+      isCurrent: currentIdx === 2,
+      completedAt: alert.approvalFlow?.hqDirectorApprove?.timestamp,
+      userName: alert.approvalFlow?.hqDirectorApprove?.userName,
+    },
+  ];
+
+  return steps;
+}
+
+export function AlertCard({ alert, onAction }: AlertCardProps) {
   const { user } = useAppStore();
-  const [comment, setComment] = useState('');
-  const [expanded, setExpanded] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
 
-  const level = levelConfig[alert.level];
+  const typeLabel = formatAlertTypeLabel(alert.type);
+  const levelLabel = formatAlertLevelLabel(alert.level);
+  const statusLabel = formatAlertStatusLabel(alert.status);
+  const timelineSteps = getTimelineSteps(alert);
+
+  const TypeIcon = alert.type === 'wastage' ? AlertTriangle : TrendingDown;
 
   const canConfirm = user?.role === 'store' && alert.status === 'pending';
   const canReview = user?.role === 'region' && alert.status === 'confirmed';
   const canApprove = user?.role === 'headquarters' && alert.status === 'reviewed';
-  const canResolve = (user?.role === 'region' || user?.role === 'headquarters') && alert.status !== 'resolved';
+  const canResolve = user?.role === 'headquarters' && alert.status === 'approved';
 
   const handleAction = async (action: 'confirm' | 'review' | 'approve' | 'resolve') => {
-    if (!user) return;
-    setLoading(true);
+    setLoading(action);
     try {
-      if (action === 'confirm') {
-        await api.alerts.confirm(alert.id, { comment, userName: user.name, userId: user.id });
-      } else if (action === 'review') {
-        await api.alerts.review(alert.id, { comment, userName: user.name, userId: user.id });
-      } else if (action === 'approve') {
-        await api.alerts.approve(alert.id, { comment, userName: user.name, userId: user.id });
-      } else if (action === 'resolve') {
-        await api.alerts.resolve(alert.id);
+      let updated: Alert;
+      switch (action) {
+        case 'confirm':
+          updated = await alertApi.confirmAlert(alert.id);
+          break;
+        case 'review':
+          updated = await alertApi.reviewAlert(alert.id);
+          break;
+        case 'approve':
+          updated = await alertApi.approveAlert(alert.id);
+          break;
+        case 'resolve':
+          updated = await alertApi.resolveAlert(alert.id);
+          break;
       }
-      onAction?.();
+      onAction?.(updated);
+    } catch (error) {
+      console.error(`Alert ${action} failed:`, error);
     } finally {
-      setLoading(false);
-      setComment('');
+      setLoading(null);
     }
   };
 
   return (
-    <div
-      className={cn(
-        'bg-white rounded-xl border-l-4 card-shadow overflow-hidden transition-all duration-300 animate-slide-up',
-        level.border,
-      )}
-      style={{ borderLeftWidth: 4 }}
-    >
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-start gap-3">
-            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', level.bg)}>
-              {alert.type === 'wastage' ? (
-                <AlertTriangle size={20} className={level.text} />
-              ) : (
-                <TrendingDown size={20} className={level.text} />
-              )}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-primary-800">{alert.storeName}</h3>
-                <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold', level.bg, level.text)}>
-                  {getAlertLevelLabel(alert.level)}
-                </span>
-                <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-medium', statusBg[alert.status])}>
-                  {getAlertStatusLabel(alert.status)}
-                </span>
-              </div>
-              <div className="text-xs text-primary-400">
-                {getAlertTypeLabel(alert.type)} · 已连续 {alert.consecutiveDays} 天
-              </div>
-            </div>
-          </div>
-
-          <div className="text-right">
-            {alert.daysRemaining !== undefined && alert.daysRemaining > 0 && (
-              <div className="flex items-center gap-1 text-xs text-danger mb-1">
-                <Clock size={12} />
-                <span>剩余 {alert.daysRemaining} 天升级</span>
-              </div>
+    <div className="bg-white rounded-2xl p-5 card-shadow border border-primary-100/50">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              'w-11 h-11 rounded-xl flex items-center justify-center shrink-0',
+              alert.type === 'wastage' ? 'bg-danger/10 text-danger' : 'bg-warning/10 text-warning'
             )}
-            <div className="text-[10px] text-primary-400">
-              {new Date(alert.createdAt).toLocaleDateString('zh-CN')}
+          >
+            <TypeIcon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <h3 className="font-serif-cn text-base font-semibold text-primary-900">
+                {typeLabel.label}
+              </h3>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium',
+                  levelLabel.className
+                )}
+              >
+                <span className={cn('w-1.5 h-1.5 rounded-full', levelLabel.dotClassName)}></span>
+                {levelLabel.label}
+              </span>
+              <span
+                className={cn(
+                  'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                  statusLabel.className
+                )}
+              >
+                {statusLabel.label}
+              </span>
             </div>
+            <p className="text-sm text-primary-500">
+              {alert.storeName} · {formatDate(alert.createdAt, 'full')}
+            </p>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-3 p-3 bg-primary-50 rounded-lg">
-          <div>
-            <div className="text-[10px] text-primary-400 mb-0.5">当前值</div>
-            <div className={cn('text-lg font-bold font-serif-cn', level.text)}>
-              {alert.type === 'wastage' ? formatPercent(alert.metricValue) : formatNumber(alert.metricValue) + ' 次'}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] text-primary-400 mb-0.5">标准阈值</div>
-            <div className="text-lg font-bold font-serif-cn text-primary-600">
-              {alert.type === 'wastage' ? formatPercent(alert.threshold) : formatNumber(alert.threshold) + ' 次'}
-            </div>
-          </div>
+      <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-xl bg-primary-50/60">
+        <div className="text-center">
+          <p className="text-xs text-primary-500 mb-0.5">当前值</p>
+          <p className={cn('font-serif-cn text-lg font-semibold', typeLabel.className)}>
+            {formatPercent(alert.metricValue / 100)}
+          </p>
         </div>
-
-        <div className="mb-3">
-          <div className="text-xs text-primary-400 mb-1">智能建议</div>
-          <p className="text-sm text-primary-700 leading-relaxed">{alert.suggestion}</p>
+        <div className="text-center">
+          <p className="text-xs text-primary-500 mb-0.5">阈值</p>
+          <p className="font-serif-cn text-lg font-semibold text-primary-700">
+            {formatPercent(alert.threshold / 100)}
+          </p>
         </div>
+        <div className="text-center">
+          <p className="text-xs text-primary-500 mb-0.5">持续天数</p>
+          <p className="font-serif-cn text-lg font-semibold text-accent-600">
+            {alert.consecutiveDays}天
+          </p>
+        </div>
+      </div>
 
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center justify-between py-2 border-t border-primary-50 text-xs text-primary-500 hover:text-primary-700 transition-colors"
-        >
-          <span>{expanded ? '收起审批流程' : '查看审批流程'}</span>
-          <ChevronRight size={14} className={cn('transition-transform', expanded && 'rotate-90')} />
-        </button>
+      {alert.suggestion && (
+        <div className="mb-4 p-3 rounded-xl bg-accent-50/80 border border-accent-100">
+          <p className="text-xs text-accent-700 font-medium mb-1">优化建议</p>
+          <p className="text-sm text-accent-800">{alert.suggestion}</p>
+        </div>
+      )}
 
-        {expanded && alert.approvalFlow && (
-          <div className="pt-3 border-t border-primary-50 space-y-3">
-            {[
-              { key: 'storeManagerConfirm', label: '店长确认', step: alert.approvalFlow.storeManagerConfirm },
-              { key: 'regionManagerReview', label: '区域经理复核', step: alert.approvalFlow.regionManagerReview },
-              { key: 'hqDirectorApprove', label: '总部总监批准', step: alert.approvalFlow.hqDirectorApprove },
-            ].map((item, idx, arr) => (
-              <div key={item.key} className="flex gap-3">
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          {timelineSteps.map((step, idx) => {
+            const StepIcon = step.icon;
+            const isLast = idx === timelineSteps.length - 1;
+            return (
+              <div key={step.key} className="flex items-center flex-1 last:flex-none">
                 <div className="flex flex-col items-center">
                   <div
                     className={cn(
-                      'w-7 h-7 rounded-full flex items-center justify-center',
-                      item.step?.status === 'approved' ? 'bg-success text-white' : 'bg-primary-100 text-primary-400',
+                      'w-8 h-8 rounded-full flex items-center justify-center transition-all',
+                      step.isCompleted
+                        ? 'bg-success text-white'
+                        : step.isCurrent
+                        ? 'bg-accent-500 text-white ring-4 ring-accent-100'
+                        : 'bg-primary-100 text-primary-400'
                     )}
                   >
-                    {item.step?.status === 'approved' ? <CheckCircle size={14} /> : item.step?.status === 'rejected' ? <XCircle size={14} /> : <User size={12} />}
-                  </div>
-                  {idx < arr.length - 1 && <div className="w-px flex-1 bg-primary-100 mt-1" />}
-                </div>
-                <div className="flex-1 pb-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-primary-700">{item.label}</span>
-                    {item.step?.timestamp && (
-                      <span className="text-[10px] text-primary-400">
-                        {new Date(item.step.timestamp).toLocaleString('zh-CN')}
-                      </span>
+                    {step.isCompleted ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <StepIcon className="w-4 h-4" />
                     )}
                   </div>
-                  {item.step ? (
-                    <>
-                      <div className="text-xs text-primary-500 mt-0.5">{item.step.userName}</div>
-                      {item.step.comment && (
-                        <div className="mt-1.5 p-2 bg-primary-50 rounded text-xs text-primary-600">{item.step.comment}</div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-xs text-primary-400 mt-0.5">待处理</div>
+                  <p
+                    className={cn(
+                      'text-xs mt-1.5 font-medium whitespace-nowrap',
+                      step.isCompleted
+                        ? 'text-success'
+                        : step.isCurrent
+                        ? 'text-accent-600'
+                        : 'text-primary-400'
+                    )}
+                  >
+                    {step.label}
+                  </p>
+                  {step.completedAt && (
+                    <p className="text-[10px] text-primary-400 mt-0.5 whitespace-nowrap">
+                      {formatDate(step.completedAt, 'short')}
+                    </p>
+                  )}
+                  {!step.completedAt && step.isCompleted && step.userName && (
+                    <p className="text-[10px] text-primary-400 mt-0.5 whitespace-nowrap">
+                      {step.userName}
+                    </p>
+                  )}
+                  {!step.isCompleted && !step.isCurrent && (
+                    <p className="text-[10px] text-primary-400 mt-0.5 whitespace-nowrap">
+                      <Clock className="w-3 h-3 inline" /> 待处理
+                    </p>
                   )}
                 </div>
+                {!isLast && (
+                  <div
+                    className={cn(
+                      'flex-1 h-0.5 mx-1 -mt-6',
+                      step.isCompleted ? 'bg-success' : 'bg-primary-100'
+                    )}
+                  ></div>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
+      </div>
 
-        {(canConfirm || canReview || canApprove || canResolve) && (
-          <div className="pt-3 border-t border-primary-50 space-y-2">
-            {(canConfirm || canReview || canApprove) && (
-              <input
-                type="text"
-                placeholder="请输入处理意见..."
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-lg bg-primary-50 border-0 focus:outline-none focus:ring-2 focus:ring-primary-200 placeholder-primary-400"
-              />
-            )}
-            <div className="flex gap-2">
-              <button
-                onClick={() => navigate(`/store/${alert.storeId}`)}
-                className="flex-1 py-2 rounded-lg bg-primary-50 text-primary-600 text-xs font-medium hover:bg-primary-100 transition-colors"
-              >
-                查看门店详情
-              </button>
-              {canConfirm && (
-                <button
-                  onClick={() => handleAction('confirm')}
-                  disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-info text-white text-xs font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-1 disabled:opacity-50"
-                >
-                  <Send size={12} />
-                  店长确认
-                </button>
-              )}
-              {canReview && (
-                <button
-                  onClick={() => handleAction('review')}
-                  disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-accent-500 text-white text-xs font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-1 disabled:opacity-50"
-                >
-                  <Send size={12} />
-                  区域复核
-                </button>
-              )}
-              {canApprove && (
-                <button
-                  onClick={() => handleAction('approve')}
-                  disabled={loading}
-                  className="flex-1 py-2 rounded-lg gradient-primary text-white text-xs font-medium hover:opacity-90 transition-opacity flex items-center justify-center gap-1 disabled:opacity-50"
-                >
-                  <Send size={12} />
-                  总部批准
-                </button>
-              )}
-              {canResolve && !canConfirm && !canReview && !canApprove && (
-                <button
-                  onClick={() => handleAction('resolve')}
-                  disabled={loading}
-                  className="flex-1 py-2 rounded-lg bg-success text-white text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  标记已解决
-                </button>
-              )}
-            </div>
-          </div>
+      <div className="flex items-center gap-2 justify-end pt-3 border-t border-primary-100">
+        {canConfirm && (
+          <button
+            onClick={() => handleAction('confirm')}
+            disabled={loading !== null}
+            className="px-4 py-2 rounded-lg bg-info text-white text-sm font-medium hover:bg-sky-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading === 'confirm' ? '处理中...' : '确认'}
+          </button>
+        )}
+        {canReview && (
+          <button
+            onClick={() => handleAction('review')}
+            disabled={loading !== null}
+            className="px-4 py-2 rounded-lg bg-primary-700 text-white text-sm font-medium hover:bg-primary-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading === 'review' ? '处理中...' : '复核'}
+          </button>
+        )}
+        {canApprove && (
+          <button
+            onClick={() => handleAction('approve')}
+            disabled={loading !== null}
+            className="px-4 py-2 rounded-lg bg-success text-white text-sm font-medium hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading === 'approve' ? '处理中...' : '批准'}
+          </button>
+        )}
+        {canResolve && (
+          <button
+            onClick={() => handleAction('resolve')}
+            disabled={loading !== null}
+            className="px-4 py-2 rounded-lg bg-accent-500 text-white text-sm font-medium hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading === 'resolve' ? '处理中...' : '标记已解决'}
+          </button>
         )}
       </div>
     </div>

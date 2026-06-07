@@ -1,155 +1,239 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   MapPin,
+  Repeat,
+  Trash2,
   Users,
-  Utensils,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Info,
+  Table2,
 } from 'lucide-react';
-import SalesTrendChart from '../components/charts/SalesTrendChart';
-import WastagePieChart from '../components/charts/WastagePieChart';
-import TimeSlotChart from '../components/charts/TimeSlotChart';
-import { api } from '../services/api';
-import type { Store, SalesTrend, WastageCategory, TimeSlotData } from '../types';
-import { cn } from '../lib/utils';
-import { getHealthStatusLabel, formatNumber, formatPercent } from '../utils/format';
+import { storeApi } from '@/services/api';
+import { KPICard } from '@/components/cards/KPICard';
+import SalesTrendChart from '@/components/charts/SalesTrendChart';
+import WastagePieChart from '@/components/charts/WastagePieChart';
+import TimeSlotChart from '@/components/charts/TimeSlotChart';
+import { formatPercent, formatNumber } from '@/utils/format';
+import { cn } from '@/lib/utils';
+import type {
+  Store,
+  SalesTrend,
+  WastageCategory,
+  TimeSlotData,
+  HealthLevel,
+} from '@/types';
 
-const statusIcon: Record<string, React.ReactNode> = {
-  excellent: <CheckCircle size={14} className="text-success" />,
-  good: <Info size={14} className="text-info" />,
-  average: <AlertTriangle size={14} className="text-warning" />,
-  poor: <XCircle size={14} className="text-danger" />,
+const healthLevelConfig: Record<HealthLevel, { label: string; className: string; dotClassName: string }> = {
+  excellent: {
+    label: '优秀',
+    className: 'bg-success/15 text-green-700 border-success/30',
+    dotClassName: 'bg-success',
+  },
+  good: {
+    label: '良好',
+    className: 'bg-primary-100 text-primary-700 border-primary-200',
+    dotClassName: 'bg-primary-600',
+  },
+  average: {
+    label: '一般',
+    className: 'bg-warning/15 text-warning border-warning/30',
+    dotClassName: 'bg-warning',
+  },
+  poor: {
+    label: '较差',
+    className: 'bg-danger/15 text-danger border-danger/30',
+    dotClassName: 'bg-danger',
+  },
 };
 
-const statusBg: Record<string, string> = {
-  excellent: 'bg-success/10 text-success',
-  good: 'bg-info/10 text-info',
-  average: 'bg-warning/10 text-warning',
-  poor: 'bg-danger/10 text-danger',
-};
+interface StoreDetailData extends Store {
+  stats?: {
+    totalRevenue: number;
+    totalOrders: number;
+    totalProfit: number;
+    avgProfitMargin: number;
+    avgFoodCostRate: number;
+    avgLaborCostRate: number;
+    avgSatisfaction: number;
+  };
+}
 
 export default function StoreDetail() {
-  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [store, setStore] = useState<Store | null>(null);
+  const { id } = useParams<{ id: string }>();
+  const [store, setStore] = useState<StoreDetailData | null>(null);
   const [salesTrend, setSalesTrend] = useState<SalesTrend[]>([]);
-  const [wastage, setWastage] = useState<WastageCategory[]>([]);
-  const [timeSlot, setTimeSlot] = useState<TimeSlotData[]>([]);
+  const [wastageCategories, setWastageCategories] = useState<WastageCategory[]>([]);
+  const [timeSlotData, setTimeSlotData] = useState<TimeSlotData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const healthLevel: HealthLevel = 'good';
+  const healthScore = 82;
 
   useEffect(() => {
     if (!id) return;
-    const loadData = async () => {
+
+    const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
-        const [storeData, trendData, wastageData, timeData] = await Promise.all([
-          api.stores.detail(id),
-          api.stores.salesTrend(id),
-          api.stores.wastageCategory(id),
-          api.stores.timeSlot(id),
+        const [storeResult, salesResult, wastageResult, timeSlotResult] = await Promise.all([
+          storeApi.getStoreById(id),
+          storeApi.getSalesTrend(id),
+          storeApi.getWastageCategory(id),
+          storeApi.getTimeSlots(id),
         ]);
-        setStore(storeData);
-        setSalesTrend(trendData);
-        setWastage(wastageData);
-        setTimeSlot(timeData);
+
+        setStore(storeResult as StoreDetailData);
+        setSalesTrend(salesResult);
+        setWastageCategories(wastageResult);
+        setTimeSlotData(timeSlotResult);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : '数据加载失败');
       } finally {
         setLoading(false);
       }
     };
-    loadData();
+
+    fetchData();
   }, [id]);
 
-  if (loading || !store) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-pulse text-primary-400">数据加载中...</div>
-      </div>
-    );
-  }
+  const todayTurnoverRate = 3.2;
+  const todayWastageRate = 0.045;
+
+  const healthConfig = healthLevelConfig[healthLevel];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center gap-4">
+    <div className="space-y-6">
+      <div className="animate-fade-in">
         <button
           onClick={() => navigate(-1)}
-          className="p-2 rounded-lg bg-white card-shadow hover:card-shadow-hover transition-all"
+          className="flex items-center gap-2 text-primary-600 hover:text-primary-800 mb-4 transition-colors"
         >
-          <ArrowLeft size={18} className="text-primary-600" />
+          <ArrowLeft className="w-5 h-5" />
+          <span className="text-sm font-medium">返回门店列表</span>
         </button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold font-serif-cn text-primary-800">{store.name}</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="flex items-center gap-1 text-xs text-primary-400">
-              <MapPin size={12} />
-              {store.address}
-            </span>
-            <span className="text-xs text-primary-300">|</span>
-            <span className="text-xs text-primary-400">{store.brand}</span>
+
+        {error && (
+          <div className="p-4 rounded-xl bg-danger/10 border border-danger/20 text-danger text-sm animate-fade-in mb-4">
+            {error}
           </div>
-        </div>
-        <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium', statusBg[store.healthStatus])}>
-          {statusIcon[store.healthStatus]}
-          <span>运营状态：{getHealthStatusLabel(store.healthStatus)}</span>
+        )}
+
+        <div className="bg-white rounded-2xl card-shadow p-6 border border-primary-100/50">
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
+                <h1 className="font-serif-cn text-2xl font-bold text-primary-900">
+                  {loading ? (
+                    <div className="h-8 w-48 bg-primary-100 rounded animate-pulse" />
+                  ) : (
+                    store?.name || '门店详情'
+                  )}
+                </h1>
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium',
+                    healthConfig.className
+                  )}
+                >
+                  <span className={cn('w-1.5 h-1.5 rounded-full', healthConfig.dotClassName)}></span>
+                  健康状态 · {healthConfig.label}
+                  <span className="font-bold">{healthScore}分</span>
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-primary-500 text-sm">
+                <MapPin className="w-4 h-4 shrink-0" />
+                <span>
+                  {loading ? (
+                    <div className="h-4 w-64 bg-primary-100 rounded animate-pulse inline-block" />
+                  ) : (
+                    <>
+                      {store?.city || ''}
+                      {store?.province ? ` · ${store.province}` : ''}
+                      {store?.address ? ` · ${store.address}` : ''}
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl p-4 card-shadow">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-              <Utensils size={16} className="text-info" />
-            </div>
-            <span className="text-xs text-primary-400">今日翻台率</span>
-          </div>
-          <div className="text-2xl font-bold font-serif-cn text-primary-800">{formatNumber(store.todayTurnover)}</div>
-          <div className="text-[10px] text-primary-400 mt-0.5">共 {store.totalTables} 张餐桌</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 card-shadow">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-              <AlertTriangle size={16} className={cn(store.todayWastage > 5 ? 'text-danger' : 'text-warning')} />
-            </div>
-            <span className="text-xs text-primary-400">今日损耗率</span>
-          </div>
-          <div className={cn('text-2xl font-bold font-serif-cn', store.todayWastage > 5 ? 'text-danger' : 'text-primary-800')}>
-            {formatPercent(store.todayWastage)}
-          </div>
-          <div className="text-[10px] text-primary-400 mt-0.5">标准值 ≤ 5%</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 card-shadow">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-              <Users size={16} className="text-primary-500" />
-            </div>
-            <span className="text-xs text-primary-400">员工人数</span>
-          </div>
-          <div className="text-2xl font-bold font-serif-cn text-primary-800">{store.staffCount}</div>
-          <div className="text-[10px] text-primary-400 mt-0.5">含后厨 {Math.floor(store.staffCount * 0.6)} 人</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-4 card-shadow">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-              <MapPin size={16} className="text-accent-500" />
-            </div>
-            <span className="text-xs text-primary-400">所在区域</span>
-          </div>
-          <div className="text-2xl font-bold font-serif-cn text-primary-800">{store.city}</div>
-          <div className="text-[10px] text-primary-400 mt-0.5">{store.province}</div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-44 rounded-2xl bg-primary-100/50 animate-pulse"
+            />
+          ))
+        ) : (
+          <>
+            <KPICard
+              title="今日翻台率"
+              value={formatNumber(todayTurnoverRate, 1)}
+              unit="次/日"
+              yoy={0.08}
+              mom={0.05}
+              gradientClass="gradient-turnover"
+              icon={Repeat}
+              delay={0}
+            />
+            <KPICard
+              title="今日损耗率"
+              value={formatPercent(todayWastageRate)}
+              yoy={-0.02}
+              mom={-0.01}
+              gradientClass="gradient-wastage"
+              icon={Trash2}
+              delay={50}
+            />
+            <KPICard
+              title="员工数"
+              value={formatNumber(store?.staffCount || 0)}
+              unit="人"
+              gradientClass="gradient-output"
+              icon={Users}
+              delay={100}
+            />
+            <KPICard
+              title="桌台数"
+              value={formatNumber(store?.totalTables || 0)}
+              unit="桌"
+              gradientClass="gradient-primary"
+              icon={Table2}
+              delay={150}
+            />
+          </>
+        )}
       </div>
 
-      <SalesTrendChart data={salesTrend} />
+      <div>
+        {loading ? (
+          <div className="h-[480px] rounded-xl bg-white card-shadow animate-pulse" />
+        ) : (
+          <SalesTrendChart data={salesTrend} />
+        )}
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <WastagePieChart data={wastage} />
-        <TimeSlotChart data={timeSlot} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div>
+          {loading ? (
+            <div className="h-[480px] rounded-xl bg-white card-shadow animate-pulse" />
+          ) : (
+            <WastagePieChart data={wastageCategories} />
+          )}
+        </div>
+        <div>
+          {loading ? (
+            <div className="h-[480px] rounded-xl bg-white card-shadow animate-pulse" />
+          ) : (
+            <TimeSlotChart data={timeSlotData} />
+          )}
+        </div>
       </div>
     </div>
   );

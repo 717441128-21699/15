@@ -9,6 +9,16 @@ export interface User {
   avatar?: string;
 }
 
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: User;
+}
+
 export interface Store {
   id: string;
   name: string;
@@ -19,9 +29,6 @@ export interface Store {
   totalTables: number;
   staffCount: number;
   regionId: string;
-  healthStatus: 'excellent' | 'good' | 'average' | 'poor';
-  todayTurnover: number;
-  todayWastage: number;
 }
 
 export interface KPIData {
@@ -70,12 +77,13 @@ export interface SalesTrend {
   }[];
 }
 
+export type WastageCategoryType = 'expired' | 'operation' | 'over_prep' | 'quality' | 'other';
+
 export interface WastageCategory {
-  category: 'expired' | 'operation' | 'over_prep' | 'quality' | 'other';
+  category: WastageCategoryType;
   label: string;
   amount: number;
   percentage: number;
-  color: string;
 }
 
 export type AlertLevel = 'level1' | 'level2';
@@ -95,7 +103,6 @@ export interface Alert {
   createdAt: string;
   suggestion: string;
   approvalFlow?: ApprovalFlow;
-  daysRemaining?: number;
 }
 
 export interface ApprovalFlow {
@@ -119,7 +126,6 @@ export interface ForecastItem {
   hourlyDemand: number[];
   totalDemand: number;
   suggestedOrder: number;
-  currentStock: number;
 }
 
 export interface SupplierQuote {
@@ -130,19 +136,18 @@ export interface SupplierQuote {
   price: number;
   minOrder: number;
   deliveryTime: string;
-  isRecommended?: boolean;
-  savedCost?: number;
+  unit?: string;
 }
+
+export type HealthLevel = 'excellent' | 'good' | 'average' | 'poor';
 
 export interface HealthReport {
   weekStart: string;
   weekEnd: string;
   healthScore: number;
-  healthLevel: 'excellent' | 'good' | 'average' | 'poor';
+  healthLevel: HealthLevel;
   metricsComparison: {
     metric: string;
-    label: string;
-    unit: string;
     currentWeek: number;
     lastWeek: number;
     samePeriodLastYear: number;
@@ -150,7 +155,6 @@ export interface HealthReport {
   wastageReasonDistribution: {
     reason: string;
     percentage: number;
-    amount: number;
   }[];
   staffRanking: {
     staffId: string;
@@ -158,14 +162,32 @@ export interface HealthReport {
     storeName: string;
     output: number;
     rank: number;
-    trend: 'up' | 'down' | 'stable';
   }[];
   suggestions: string[];
 }
 
+export interface AlertQueryParams {
+  level?: AlertLevel;
+  status?: AlertStatus;
+  type?: AlertType;
+  storeId?: string;
+}
+
+export interface StoreFilters {
+  city?: string;
+  brand?: string;
+  regionId?: string;
+}
+
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+  success: boolean;
+}
+
 export interface TimeSlotData {
-  hour: string;
-  turnover: number;
-  orders: number;
+  time: string;
   revenue: number;
+  orders: number;
+  customers: number;
 }
