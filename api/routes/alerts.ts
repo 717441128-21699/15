@@ -29,7 +29,8 @@ router.get('/', (req: AuthRequest, res: Response) => {
     filteredAlerts = filteredAlerts.filter((a) => a.type === type);
   }
   if (storeId) {
-    filteredAlerts = filteredAlerts.filter((a) => a.storeId === storeId);
+    const sid = String(storeId).toUpperCase();
+    filteredAlerts = filteredAlerts.filter((a) => a.storeId.toUpperCase() === sid);
   }
 
   const pageNum = parseInt(page as string, 10);

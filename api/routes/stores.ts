@@ -89,7 +89,8 @@ router.get('/:id', (req: AuthRequest, res: Response) => {
 
 router.get('/:id/sales-trend', (req: AuthRequest, res: Response) => {
   const allowedStores = filterStoresByRole(req.userRole!, req.userRegion, req.userStoreId);
-  const store = allowedStores.find((s) => s.id === req.params.id);
+  const storeId = req.params.id.toUpperCase();
+  const store = allowedStores.find((s) => s.id.toUpperCase() === storeId);
 
   if (!store) {
     return res.status(404).json({ code: 404, message: '门店不存在或无权限访问' });
@@ -119,7 +120,8 @@ router.get('/:id/sales-trend', (req: AuthRequest, res: Response) => {
 
 router.get('/:id/waste-category', (req: AuthRequest, res: Response) => {
   const allowedStores = filterStoresByRole(req.userRole!, req.userRegion, req.userStoreId);
-  const store = allowedStores.find((s) => s.id === req.params.id);
+  const storeId = req.params.id.toUpperCase();
+  const store = allowedStores.find((s) => s.id.toUpperCase() === storeId);
 
   if (!store) {
     return res.status(404).json({ code: 404, message: '门店不存在或无权限访问' });

@@ -78,17 +78,21 @@ export default function StoreDetail() {
       setLoading(true);
       setError(null);
       try {
-        const [storeResult, salesResult, wastageResult, timeSlotResult] = await Promise.all([
+        const [storeRes, salesRes, wastageRes, timeSlotRes] = await Promise.allSettled([
           storeApi.getStoreById(id),
           storeApi.getSalesTrend(id),
           storeApi.getWastageCategory(id),
           storeApi.getTimeSlots(id),
         ]);
 
-        setStore(storeResult as StoreDetailData);
-        setSalesTrend(salesResult);
-        setWastageCategories(wastageResult);
-        setTimeSlotData(timeSlotResult);
+        if (storeRes.status === 'fulfilled') setStore(storeRes.value as StoreDetailData);
+        if (salesRes.status === 'fulfilled') setSalesTrend(salesRes.value);
+        if (wastageRes.status === 'fulfilled') setWastageCategories(wastageRes.value);
+        if (timeSlotRes.status === 'fulfilled') setTimeSlotData(timeSlotRes.value);
+
+        if (storeRes.status === 'rejected') {
+          setError(storeRes.reason instanceof Error ? storeRes.reason.message : '门店数据加载失败');
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : '数据加载失败');
       } finally {
